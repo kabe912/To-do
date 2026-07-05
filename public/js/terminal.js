@@ -163,10 +163,7 @@
       return;
     }
 
-    const maxRows = 8;
-    const shown = items.slice(0, maxRows);
-
-    shown.forEach((item, i) => {
+    items.forEach((item, i) => {
       const el = document.createElement('div');
       el.className = 'suggestion-item';
       el.innerHTML = `
@@ -178,15 +175,8 @@
       suggestions.appendChild(el);
     });
 
-    if (items.length > maxRows) {
-      const el = document.createElement('div');
-      el.className = 'suggestion-item';
-      el.innerHTML = `<span class="cmd-desc" style="text-align:center;color:#555;">${items.length} commands</span>`;
-      suggestions.appendChild(el);
-    }
-
     suggestions.classList.remove('hidden');
-    if (shown.length > 0) setActiveSuggestion(0);
+    if (items.length > 0) setActiveSuggestion(0);
   }
 
   function setActiveSuggestion(idx) {
