@@ -212,8 +212,10 @@
   }
 
   let _suggestionTimer = null;
+  let _justSubmitted = false;
 
   function renderSuggestionsForInput() {
+    if (_justSubmitted) { _justSubmitted = false; return; }
     const val = input.value;
     const noSpaceYet = !val.includes(' ');
     if (noSpaceYet) {
@@ -234,6 +236,7 @@
     const trimmed = input.value.trim();
     if (!trimmed) return;
     busy = true;
+    _justSubmitted = true;
     history.push(trimmed);
     historyIndex = history.length;
     input.value = '';
