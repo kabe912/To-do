@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: web-terminal-todo
+    env: node
+    buildCommand: npm install
+    startCommand: node backend/server.js
+    envVars:
+      - key: DB_HOST
+        value: mysqldbt-dbt1.l.aivencloud.com
+      - key: DB_PORT
+        value: "13268"
+      - key: DB_USER
+        value: avnadmin
+      - key: DB_PASSWORD
+        value: minhtien303
+      - key: DB_NAME
+        value: web_terminal
+      - key: SSL_CA
+        value: backend/config/ca.pem
+      - key: NODE_VERSION
+        value: "20"

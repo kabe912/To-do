@@ -1,0 +1,116 @@
+const express = require('express');
+const router = express.Router();
+const pool = require('../config/db');
+
+router.get('/', async (req, res, next) => {
+  try {
+    const { category, priority, search, completed, sort } = req.query;
+    let sql = 'SELECT * FROM todos WHERE 1=1';
+    const params = [];
+
+    if (category) { sql += ' AND category = ?'; params.push(category); }
+    if (priority) { sql += ' AND priority = ?'; params.push(priority); }
+    if (completed !== undefined) { sql += ' AND completed = ?'; params.push(completed === 'true' ? 1 : 0); }
+    if (search) { sql += ' AND (title LIKE ? OR description LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
+
+    sql += ' ORDER BY position ASC, created_at DESC';
+
+    const [rows] = await pool.query(sql, params);
+    res.json(rows);
+  } catch (err) { next(err); }
+});
+
+router.post('/', async (req, res, next) => {
+  try {
+    const { title, description, category, priority, due_date } = req.body;
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+
+    const [maxPos] = await pool.query('SELECT COALESCE(MAX(position), -1) + 1 AS pos FROM todos');
+    const position = maxPos[0].pos;
+
+    const [result] = await pool.query(
+      'INSERT INTO todos (title, description, category, priority, due_date, position) VALUES (?, ?, ?, ?, ?, ?)',
+      [title.trim(), description || null, category || null, priority || 'medium', due_date || null, position]
+    );
+
+    const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [result.insertId]);
+    res.status(201).json(todo[0]);
+  } catch (err) { next(err); }
+});
+
+router.put('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { title, description, category, priority, due_date, completed } = req.body;
+
+    const fields = [];
+    const params = [];
+
+    if (title !== undefined) { fields.push('title = ?'); params.push(title.trim()); }
+    if (description !== undefined) { fields.push('description = ?'); params.push(description); }
+    if (category !== undefined) { fields.push('category = ?'); params.push(category); }
+    if (priority !== undefined) { fields.push('priority = ?'); params.push(priority); }
+    if (due_date !== undefined) { fields.push('due_date = ?'); params.push(due_date); }
+    if (completed !== undefined) { fields.push('completed = ?'); params.push(completed ? 1 : 0); }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    params.push(id);
+    await pool.query(`UPDATE todos SET ${fields.join(', ')} WHERE id = ?`, params);
+
+    const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [id]);
+    if (!todo[0]) return res.status(404).json({ error: 'Todo not found' });
+    res.json(todo[0]);
+  } catch (err) { next(err); }
+});
+
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const [result] = await pool.query('DELETE FROM todos WHERE id = ?', [id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Todo not found' });
+    res.json({ message: 'Todo deleted' });
+  } catch (err) { next(err); }
+});
+
+router.patch('/:id/toggle', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await pool.query('UPDATE todos SET completed = NOT completed WHERE id = ?', [id]);
+    const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [id]);
+    if (!todo[0]) return res.status(404).json({ error: 'Todo not found' });
+    res.json(todo[0]);
+  } catch (err) { next(err); }
+});
+
+router.patch('/reorder', async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids array required' });
+
+    for (let i = 0; i < ids.length; i++) {
+      await pool.query('UPDATE todos SET position = ? WHERE id = ?', [i, ids[i]]);
+    }
+    res.json({ message: 'Reordered' });
+  } catch (err) { next(err); }
+});
+
+router.get('/stats', async (req, res, next) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT
+        COUNT(*) AS total,
+        SUM(completed = 1) AS completed,
+        SUM(completed = 0) AS active,
+        COUNT(DISTINCT category) AS categories
+      FROM todos
+    `);
+    res.json(rows[0]);
+  } catch (err) { next(err); }
+});
+
+module.exports = router;
