@@ -24,13 +24,16 @@
     <div id="output">
       <div class="line welcome">
         <span class="green">Web Terminal v1.0</span><br>
-        Type <span class="yellow">help</span> to see available commands.<br>
-        Use <span class="cyan">↑</span> <span class="cyan">↓</span> for history, <span class="cyan">Tab</span> for autocomplete.
+        Type <span class="yellow">help</span> or press <span class="cyan">/</span> for commands.<br>
+        Use <span class="cyan">↑</span> <span class="cyan">↓</span> for history, <span class="cyan">Tab</span> or <span class="cyan">⏎</span> to select.
       </div>
     </div>
     <div id="input-line">
       <span class="prompt">$</span>
-      <input type="text" id="command-input" autofocus spellcheck="false" autocomplete="off">
+      <div id="input-wrapper">
+        <input type="text" id="command-input" autofocus spellcheck="false" autocomplete="off">
+        <div id="suggestions" class="hidden"></div>
+      </div>
     </div>
   </div>
 

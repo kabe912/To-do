@@ -189,6 +189,7 @@ html, body {
   background: #1e1e1e;
   border-top: 1px solid #2a2a2a;
   flex-shrink: 0;
+  position: relative;
 }
 
 .prompt {
@@ -197,10 +198,16 @@ html, body {
   margin-right: 10px;
   font-size: 14px;
   user-select: none;
+  flex-shrink: 0;
+}
+
+#input-wrapper {
+  flex: 1;
+  position: relative;
 }
 
 #command-input {
-  flex: 1;
+  width: 100%;
   background: transparent;
   border: none;
   outline: none;
@@ -213,6 +220,66 @@ html, body {
 #command-input::selection {
   background: rgba(0, 255, 65, 0.25);
 }
+
+/* Suggestions dropdown */
+#suggestions {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: #252526;
+  border: 1px solid #3c3c3c;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 100;
+  margin-bottom: 4px;
+}
+
+#suggestions::-webkit-scrollbar { width: 5px; }
+#suggestions::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+
+.suggestion-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.suggestion-item:last-child { border-bottom: none; }
+
+.suggestion-item .cmd-name {
+  color: #f0f0f0;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.suggestion-item .cmd-desc {
+  color: #888;
+  margin-left: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.suggestion-item .cmd-hotkey {
+  color: #555;
+  font-size: 11px;
+  margin-left: 12px;
+  flex-shrink: 0;
+}
+
+.suggestion-item.active {
+  background: #094771;
+}
+
+.suggestion-item.active .cmd-name { color: #fff; }
+.suggestion-item.active .cmd-desc { color: #ccc; }
+.suggestion-item.active .cmd-hotkey { color: #888; }
 
 .hidden { display: none !important; }
 
