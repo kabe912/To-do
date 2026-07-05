@@ -3,7 +3,7 @@ services:
     name: web-terminal-todo
     env: node
     buildCommand: npm install
-    startCommand: node backend/server.js
+    startCommand: node server.js
     envVars:
       - key: DB_HOST
         value: mysqldbt-dbt1.l.aivencloud.com

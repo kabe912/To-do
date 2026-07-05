@@ -1,7 +1,7 @@
 const mysql = require('mysql2/promise');
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
 const sslCaPath = process.env.SSL_CA;
 const sslConfig = sslCaPath && fs.existsSync(path.resolve(sslCaPath))
