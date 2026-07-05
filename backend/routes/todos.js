@@ -5,29 +5,42 @@ const pool = require('../config/db');
 router.get('/', async (req, res, next) => {
   try {
     const { category, priority, search, status, completed, sort, due_soon } = req.query;
-    let sql = 'SELECT t.*, GROUP_CONCAT(DISTINCT tg.name ORDER BY tg.name SEPARATOR ",") AS tags FROM todos t LEFT JOIN todo_tags tt ON t.id = tt.todo_id LEFT JOIN tags tg ON tt.tag_id = tg.id WHERE 1=1';
+    let sql = 'SELECT * FROM todos WHERE 1=1';
     const params = [];
 
-    if (category) { sql += ' AND t.category = ?'; params.push(category); }
-    if (priority) { sql += ' AND t.priority = ?'; params.push(priority); }
-    if (status) { sql += ' AND t.status = ?'; params.push(status); }
-    if (completed !== undefined) { sql += ' AND t.completed = ?'; params.push(completed === 'true' ? 1 : 0); }
-    if (search) { sql += ' AND (t.title LIKE ? OR t.description LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
+    if (category) { sql += ' AND category = ?'; params.push(category); }
+    if (priority) { sql += ' AND priority = ?'; params.push(priority); }
+    if (status) { sql += ' AND status = ?'; params.push(status); }
+    if (completed !== undefined) { sql += ' AND completed = ?'; params.push(completed === 'true' ? 1 : 0); }
+    if (search) { sql += ' AND (title LIKE ? OR description LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
     if (due_soon) {
       const days = parseInt(due_soon) || 3;
-      sql += ' AND t.due_date IS NOT NULL AND t.due_date <= DATE_ADD(CURDATE(), INTERVAL ? DAY) AND t.completed = 0';
+      sql += ' AND due_date IS NOT NULL AND due_date <= DATE_ADD(CURDATE(), INTERVAL ? DAY) AND completed = 0';
       params.push(days);
     }
 
-    sql += ' GROUP BY t.id';
-
-    if (sort === 'due') sql += ' ORDER BY t.due_date ASC, t.priority DESC';
-    else if (sort === 'priority') sql += ' ORDER BY FIELD(t.priority, "high", "medium", "low"), t.due_date ASC';
-    else if (sort === 'created') sql += ' ORDER BY t.created_at DESC';
-    else sql += " ORDER BY FIELD(t.status, 'in_progress', 'pending', 'learned', 'completed'), t.position ASC, t.created_at DESC";
+    if (sort === 'due') sql += ' ORDER BY due_date ASC, priority DESC';
+    else if (sort === 'priority') sql += ' ORDER BY FIELD(priority, "high", "medium", "low"), due_date ASC';
+    else if (sort === 'created') sql += ' ORDER BY created_at DESC';
+    else sql += " ORDER BY FIELD(status, 'in_progress', 'pending', 'learned', 'completed'), position ASC, created_at DESC";
 
     const [rows] = await pool.query(sql, params);
-    rows.forEach(r => { if (r.tags) r.tags = r.tags.split(','); else r.tags = []; });
+
+    // Fetch tags separately to avoid MySQL 5.7 GROUP_CONCAT issues
+    if (rows.length) {
+      const ids = rows.map(r => r.id);
+      const placeholders = ids.map(() => '?').join(',');
+      const [tagRows] = await pool.query(
+        `SELECT tt.todo_id, t.name FROM todo_tags tt JOIN tags t ON t.id = tt.tag_id WHERE tt.todo_id IN (${placeholders}) ORDER BY t.name`,
+        ids
+      );
+      const tagMap = {};
+      tagRows.forEach(r => { if (!tagMap[r.todo_id]) tagMap[r.todo_id] = []; tagMap[r.todo_id].push(r.name); });
+      rows.forEach(r => { r.tags = tagMap[r.id] || []; });
+    } else {
+      rows.forEach(r => { r.tags = []; });
+    }
+
     res.json(rows);
   } catch (err) { next(err); }
 });
