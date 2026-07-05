@@ -152,8 +152,7 @@ html, body {
 }
 
 .todo-cell.id { width: 40px; color: #666; text-align: right; }
-.todo-cell.check { width: 30px; text-align: center; }
-.todo-cell.title { max-width: 350px; white-space: nowrap; }
+.todo-cell.title { max-width: 300px; white-space: nowrap; }
 .todo-cell.done .title-text { text-decoration: line-through; color: #666; }
 .todo-cell.priority { width: 60px; text-align: center; }
 .todo-cell.due { width: 100px; color: #888; font-size: 12px; }
@@ -165,6 +164,22 @@ html, body {
 
 .checkbox-done { color: #00ff41; }
 .checkbox-pending { color: #555; }
+
+/* Status badges */
+.todo-cell.status { width: 80px; text-align: center; }
+.status-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.status-pending { color: #888; background: rgba(136,136,136,0.15); }
+.status-progress { color: #00d4ff; background: rgba(0,212,255,0.15); }
+.status-done { color: #00ff41; background: rgba(0,255,65,0.15); }
+.status-learned { color: #ff79c6; background: rgba(255,121,198,0.15); }
 
 /* Input line */
 #input-line {

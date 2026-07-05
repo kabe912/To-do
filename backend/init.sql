@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS todos (
   description TEXT,
   category    VARCHAR(100) DEFAULT NULL,
   priority    ENUM('low','medium','high') DEFAULT 'medium',
+  status      ENUM('pending','in_progress','completed','learned') NOT NULL DEFAULT 'pending',
   due_date    DATE DEFAULT NULL,
   completed   BOOLEAN DEFAULT FALSE,
   position    INT DEFAULT 0,

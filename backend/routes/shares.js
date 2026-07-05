@@ -52,7 +52,7 @@ router.get('/:token', async (req, res, next) => {
 
     const placeholders = todoIds.map(() => '?').join(',');
     const [todos] = await pool.query(
-      `SELECT id, title, description, category, priority, due_date, completed, created_at FROM todos WHERE id IN (${placeholders}) ORDER BY FIELD(id, ${placeholders})`,
+      `SELECT id, title, description, category, priority, status, due_date, completed, created_at FROM todos WHERE id IN (${placeholders}) ORDER BY FIELD(id, ${placeholders})`,
       [...todoIds, ...todoIds]
     );
 
@@ -85,7 +85,7 @@ router.post('/:token/verify', async (req, res, next) => {
 
     const placeholders = todoIds.map(() => '?').join(',');
     const [todos] = await pool.query(
-      `SELECT id, title, description, category, priority, due_date, completed, created_at FROM todos WHERE id IN (${placeholders}) ORDER BY FIELD(id, ${placeholders})`,
+      `SELECT id, title, description, category, priority, status, due_date, completed, created_at FROM todos WHERE id IN (${placeholders}) ORDER BY FIELD(id, ${placeholders})`,
       [...todoIds, ...todoIds]
     );
 

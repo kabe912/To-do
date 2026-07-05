@@ -62,12 +62,15 @@
     const table = document.createElement('div');
     table.className = 'todo-table';
 
+    const statusLabels = { pending: 'pending', in_progress: 'learn', completed: 'done', learned: 'known' };
+    const statusColors = { pending: 'status-pending', in_progress: 'status-progress', completed: 'status-done', learned: 'status-learned' };
+
     const header = document.createElement('div');
     header.className = 'todo-row header';
     header.innerHTML = `
       <div class="todo-cell id">#</div>
-      <div class="todo-cell check"></div>
       <div class="todo-cell title">Title</div>
+      <div class="todo-cell status">Status</div>
       <div class="todo-cell priority">Pri</div>
       <div class="todo-cell due">Due</div>
       <div class="todo-cell category">Cat</div>
@@ -77,14 +80,16 @@
     todos.forEach(t => {
       const row = document.createElement('div');
       row.className = 'todo-row';
-      if (t.completed) row.classList.add('done');
+      if (t.status === 'completed' || t.status === 'learned') row.classList.add('done');
 
       const priClass = t.priority === 'high' ? 'priority-high' : t.priority === 'low' ? 'priority-low' : 'priority-medium';
+      const statusClass = statusColors[t.status] || 'status-pending';
+      const statusLabel = statusLabels[t.status] || t.status;
 
       row.innerHTML = `
         <div class="todo-cell id">${t.id}</div>
-        <div class="todo-cell check ${t.completed ? 'checkbox-done' : 'checkbox-pending'}">${t.completed ? '☑' : '☐'}</div>
-        <div class="todo-cell title${t.completed ? ' done' : ''}"><span class="title-text">${escapeHtml(t.title)}</span></div>
+        <div class="todo-cell title${t.status === 'completed' || t.status === 'learned' ? ' done' : ''}"><span class="title-text">${escapeHtml(t.title)}</span></div>
+        <div class="todo-cell status"><span class="status-badge ${statusClass}">${statusLabel}</span></div>
         <div class="todo-cell priority ${priClass}">${t.priority.toUpperCase().substring(0, 4)}</div>
         <div class="todo-cell due">${t.due_date || ''}</div>
         <div class="todo-cell category">${escapeHtml(t.category || '')}</div>
