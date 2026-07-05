@@ -317,9 +317,9 @@ const COMMANDS = {
         switch (args[i]) {
           case '-s': case '--status': updates.status = args[++i]; break;
           case '-p': case '--priority': updates.priority = args[++i]; break;
-          case '-d': case '--due': updates.due_date = args[++i]; break;
+          case '-d': case '--due': case '--due-date': updates.due_date = args[++i]; break;
           case '-c': case '--category': updates.category = args[++i]; break;
-          case '--desc': updates.description = args[++i]; break;
+          case '--desc': case '--description': updates.description = args[++i]; break;
           default: title = (title ? title + ' ' : '') + args[i]; i++; continue;
         }
         i++;
