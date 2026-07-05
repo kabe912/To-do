@@ -24,8 +24,17 @@ const API = {
   updateTodo(id, data) { return this.request('PUT', `/todos/${id}`, data); },
   deleteTodo(id) { return this.request('DELETE', `/todos/${id}`); },
   toggleTodo(id) { return this.request('PATCH', `/todos/${id}/toggle`); },
+  completeTodo(id) { return this.request('PATCH', `/todos/${id}/complete`); },
   reorderTodos(ids) { return this.request('PATCH', '/todos/reorder', { ids }); },
   getStats() { return this.request('GET', '/todos/stats'); },
+
+  listTags() { return this.request('GET', '/todos/tags/list'); },
+  addTag(todoId, name) { return this.request('POST', `/todos/${todoId}/tags`, { name }); },
+  removeTag(todoId, name) { return this.request('DELETE', `/todos/${todoId}/tags/${name}`); },
+
+  timeStart(todoId) { return this.request('POST', `/todos/${todoId}/time/start`); },
+  timeStop(todoId) { return this.request('PUT', `/todos/${todoId}/time/stop`); },
+  timeLog(todoId) { return this.request('GET', `/todos/${todoId}/time`); },
 
   createShareLink(data) { return this.request('POST', '/share', data); },
   getShareLink(token) { return this.request('GET', `/share/${token}`); },

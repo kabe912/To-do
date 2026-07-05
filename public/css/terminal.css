@@ -152,11 +152,12 @@ html, body {
 }
 
 .todo-cell.id { width: 40px; color: #666; text-align: right; }
-.todo-cell.title { max-width: 300px; white-space: nowrap; }
+.todo-cell.title { max-width: 250px; white-space: nowrap; }
 .todo-cell.done .title-text { text-decoration: line-through; color: #666; }
 .todo-cell.priority { width: 60px; text-align: center; }
 .todo-cell.due { width: 100px; color: #888; font-size: 12px; }
 .todo-cell.category { width: 80px; }
+.todo-cell.tags { width: 120px; color: #888; font-size: 11px; }
 
 .priority-high { color: #ff5555; font-weight: 700; }
 .priority-medium { color: #ffd700; }

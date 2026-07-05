@@ -72,7 +72,8 @@
       <div class="todo-cell status">Status</div>
       <div class="todo-cell priority">Pri</div>
       <div class="todo-cell due">Due</div>
-      <div class="todo-cell category">Cat</div>`;
+      <div class="todo-cell category">Cat</div>
+      <div class="todo-cell tags">Tags</div>`;
     table.appendChild(header);
 
     todos.forEach(t => {
@@ -88,7 +89,8 @@
         <div class="todo-cell status"><span class="status-badge ${sc}">${sl}</span></div>
         <div class="todo-cell priority ${priClass}">${t.priority.toUpperCase().substring(0, 4)}</div>
         <div class="todo-cell due">${typeof formatDate === 'function' ? formatDate(t.due_date) : (t.due_date || '')}</div>
-        <div class="todo-cell category">${escapeHtml(t.category || '')}</div>`;
+        <div class="todo-cell category">${escapeHtml(t.category || '')}</div>
+        <div class="todo-cell tags">${t.tags ? escapeHtml(t.tags.join(', ')) : ''}</div>`;
       table.appendChild(row);
     });
 
@@ -301,6 +303,36 @@
       e.preventDefault();
       if (isOpen && suggestionIndex >= 0 && suggestionItems[suggestionIndex]) {
         selectSuggestion(suggestionIndex);
+        return;
+      }
+      // Tab complete: show arg suggestions
+      const parts = cmd.split(' ');
+      if (parts.length === 2 && parts[0] && COMMANDS[parts[0]] && !parts[0].startsWith('/')) {
+        const filter = parts[1];
+        if (typeof getTodos === 'function') {
+          getTodos().then(todos => {
+            const active = (ACTIVE_STATUSES ? todos.filter(t => ACTIVE_STATUSES.includes(t.status)) : todos);
+            active.forEach((t, i) => { if (t._row === undefined) t._row = i + 1; });
+            const q = filter.replace(/^#+/, '').toLowerCase();
+            const matched = active.filter(t => !q || String(t._row).includes(q) || t.title.toLowerCase().includes(q));
+            const items = matched.map(t => ({ type: 'arg', name: '#' + t._row, desc: t.title }));
+            if (items.length) {
+              suggestionItems = items;
+              suggestions.innerHTML = '';
+              suggestionIndex = -1;
+              items.forEach((item, i) => {
+                const el = document.createElement('div');
+                el.className = 'suggestion-item';
+                el.innerHTML = `<span class="cmd-name">${escapeHtml(item.name)}</span><span class="cmd-desc">${escapeHtml(item.desc)}</span><span class="cmd-hotkey">⏎</span>`;
+                el.addEventListener('mousedown', (e) => { e.preventDefault(); selectSuggestion(i); });
+                el.addEventListener('mouseenter', () => setActiveSuggestion(i));
+                suggestions.appendChild(el);
+              });
+              suggestions.classList.remove('hidden');
+              setActiveSuggestion(0);
+            }
+          }).catch(() => {});
+        }
       }
     }
 

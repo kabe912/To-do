@@ -93,6 +93,7 @@
         <div class="todo-cell priority">Pri</div>
         <div class="todo-cell due">Due</div>
         <div class="todo-cell category">Cat</div>
+        <div class="todo-cell tags">Tags</div>
       `;
       output.appendChild(header);
 
@@ -110,6 +111,7 @@
           <div class="todo-cell priority ${priClass}">${t.priority.toUpperCase().substring(0, 4)}</div>
           <div class="todo-cell due">${typeof formatDate === 'function' ? formatDate(t.due_date) : (t.due_date || '')}</div>
           <div class="todo-cell category">${escapeHtml(t.category || '')}</div>
+          <div class="todo-cell tags">${t.tags ? escapeHtml(t.tags.join(', ')) : ''}</div>
         `;
         output.appendChild(row);
       });
