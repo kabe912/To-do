@@ -189,7 +189,14 @@
   function selectSuggestion(idx) {
     const item = suggestionItems[idx];
     if (!item) return;
-    input.value = item.name + ' ';
+    if (item.type === 'arg') {
+      const spaceIdx = input.value.indexOf(' ');
+      if (spaceIdx >= 0) {
+        input.value = input.value.substring(0, spaceIdx) + ' ' + item.name + ' ';
+      }
+    } else {
+      input.value = item.name + ' ';
+    }
     hideSuggestions();
     input.focus();
   }
@@ -204,13 +211,36 @@
   let _suggestionTimer = null;
   let _justSubmitted = false;
 
-  function renderSuggestionsForInput() {
+  async function buildArgSuggestions(filter) {
+    try {
+      if (typeof getTodos !== 'function') return [];
+      const todos = await getTodos();
+      const active = todos.filter(t => ACTIVE_STATUSES.includes(t.status));
+      active.forEach((t, i) => t._row = i + 1);
+
+      const q = filter.replace(/^#+/, '').toLowerCase();
+      return active
+        .filter(t => !q || String(t._row).includes(q) || t.title.toLowerCase().includes(q))
+        .map(t => ({ type: 'arg', name: '#' + t._row, desc: t.title }));
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async function renderSuggestionsForInput() {
     if (_justSubmitted) { _justSubmitted = false; return; }
     const val = input.value;
     const noSpaceYet = !val.includes(' ');
     if (noSpaceYet) {
       const filter = val.startsWith('/') ? val.slice(1) : val;
       const items = buildSuggestions(filter);
+      renderSuggestions(items);
+      return;
+    }
+    const firstWord = val.split(' ')[0].replace(/^['"]/, '');
+    if (firstWord && COMMANDS[firstWord]) {
+      const filter = val.slice(val.indexOf(' ')).trim();
+      const items = await buildArgSuggestions(filter);
       renderSuggestions(items);
     } else {
       hideSuggestions();
@@ -219,7 +249,7 @@
 
   function updateSuggestions() {
     clearTimeout(_suggestionTimer);
-    _suggestionTimer = setTimeout(renderSuggestionsForInput, 30);
+    _suggestionTimer = setTimeout(() => { renderSuggestionsForInput().catch(() => {}); }, 30);
   }
 
   async function submitInput() {
@@ -238,7 +268,7 @@
   input.addEventListener('input', updateSuggestions);
   input.addEventListener('focus', () => {
     clearTimeout(_suggestionTimer);
-    renderSuggestionsForInput();
+    renderSuggestionsForInput().catch(() => {});
   });
 
   input.addEventListener('keydown', async (e) => {
