@@ -211,7 +211,9 @@
     suggestionIndex = -1;
   }
 
-  function updateSuggestions() {
+  let _suggestionTimer = null;
+
+  function renderSuggestionsForInput() {
     const val = input.value;
     const noSpaceYet = !val.includes(' ');
     if (noSpaceYet) {
@@ -221,6 +223,11 @@
     } else {
       hideSuggestions();
     }
+  }
+
+  function updateSuggestions() {
+    clearTimeout(_suggestionTimer);
+    _suggestionTimer = setTimeout(renderSuggestionsForInput, 30);
   }
 
   async function submitInput() {
@@ -236,7 +243,10 @@
   }
 
   input.addEventListener('input', updateSuggestions);
-  input.addEventListener('focus', updateSuggestions);
+  input.addEventListener('focus', () => {
+    clearTimeout(_suggestionTimer);
+    renderSuggestionsForInput();
+  });
 
   input.addEventListener('keydown', async (e) => {
     if (busy) { e.preventDefault(); return; }

@@ -9,6 +9,19 @@ const STATUS_VALUES = ['pending', 'in_progress', 'completed', 'learned'];
 const ARCHIVE_STATUSES = ['completed', 'learned'];
 const ACTIVE_STATUSES = ['pending', 'in_progress'];
 
+let _todoCache = null;
+let _cacheTime = 0;
+const CACHE_TTL = 1500;
+
+function invalidateCache() { _todoCache = null; }
+
+async function getTodos() {
+  if (_todoCache && Date.now() - _cacheTime < CACHE_TTL) return _todoCache;
+  _todoCache = await API.listTodos();
+  _cacheTime = Date.now();
+  return _todoCache;
+}
+
 function todayStr() {
   const d = new Date();
   return d.getFullYear() + '-' +
@@ -18,7 +31,7 @@ function todayStr() {
 
 async function resolveTodos(selectors, opts = {}) {
   const listAll = opts.all || false;
-  let todos = await API.listTodos();
+  let todos = await getTodos();
   if (!listAll) {
     const activeIds = todos.filter(t => ACTIVE_STATUSES.includes(t.status)).map(t => t.id);
     todos.forEach(t => { t._row = activeIds.indexOf(t.id) >= 0 ? activeIds.indexOf(t.id) + 1 : null; });
@@ -100,7 +113,11 @@ const COMMANDS = {
       }
 
       try {
-        let todos = await API.listTodos(filters);
+        let todos = await getTodos();
+        if (filters.search) todos = todos.filter(t => t.title.toLowerCase().includes(filters.search.toLowerCase()));
+        if (filters.status) todos = todos.filter(t => t.status === filters.status);
+        if (filters.priority) todos = todos.filter(t => t.priority === filters.priority);
+        if (filters.category) todos = todos.filter(t => t.category === filters.category);
 
         if (!showAll && !showArchived && !filters.status) {
           todos = todos.filter(t => ACTIVE_STATUSES.includes(t.status));
@@ -152,6 +169,7 @@ const COMMANDS = {
 
       try {
         const created = await API.addTodo(todo);
+        invalidateCache();
         return ` Created #${created.id}: "${created.title}" [${created.due_date}]`;
       } catch (err) {
         return ` Error: ${err.message}`;
@@ -168,6 +186,7 @@ const COMMANDS = {
       try {
         const update = typeof statusField === 'object' ? statusField : { status: statusField };
         const todo = await API.updateTodo(r.todo.id, update);
+        invalidateCache();
         results.push(successMsg ? successMsg(todo) : ` #${r.todo.id} → ${STATUS_LABELS[todo.status] || todo.status}`);
       } catch (err) {
         results.push(` #${r.todo.id}: ${err.message}`);
@@ -229,6 +248,7 @@ const COMMANDS = {
       const cv = (s === 'completed' || s === 'learned') ? true : (s === 'pending' ? false : undefined);
       try {
         const todo = await API.updateTodo(r.todo.id, { status: s, ...(cv !== undefined ? { completed: cv } : {}) });
+        invalidateCache();
         return ` #${todo.id} "${todo.title}" → ${STATUS_LABELS[s]}`;
       } catch (err) {
         return ` Error: ${err.message}`;
@@ -253,6 +273,7 @@ const COMMANDS = {
         const archived = todos.filter(t => ARCHIVE_STATUSES.includes(t.status));
         if (!archived.length) return ' No archived todos to purge.';
         for (const t of archived) await API.deleteTodo(t.id);
+        invalidateCache();
         return ` Purged ${archived.length} archived todo(s).`;
       } catch (err) {
         return ` Error: ${err.message}`;
@@ -269,7 +290,7 @@ const COMMANDS = {
       const results = [];
       for (const r of resolved) {
         if (r.error) { results.push(` ${r.error}`); continue; }
-        try { await API.deleteTodo(r.todo.id); results.push(` Deleted #${r.todo.id} "${r.todo.title}"`); }
+        try { await API.deleteTodo(r.todo.id); invalidateCache(); results.push(` Deleted #${r.todo.id} "${r.todo.title}"`); }
         catch (err) { results.push(` #${r.todo.id}: ${err.message}`); }
       }
       return results.join('\n');
@@ -308,6 +329,7 @@ const COMMANDS = {
 
       try {
         const updated = await API.updateTodo(todoId, updates);
+        invalidateCache();
         return ` Updated #${updated.id}: "${updated.title}"`;
       } catch (err) {
         return ` Error: ${err.message}`;
@@ -327,6 +349,7 @@ const COMMANDS = {
       if (r.error) return ` ${r.error}`;
       try {
         const updated = await API.updateTodo(r.todo.id, { priority: pri });
+        invalidateCache();
         return ` #${updated.id} "${updated.title}" priority → ${pri}`;
       } catch (err) {
         return ` Error: ${err.message}`;
@@ -398,6 +421,7 @@ const COMMANDS = {
     usage: 'export',
     async execute() {
       try {
+        invalidateCache();
         const todos = await API.listTodos();
         return JSON.stringify(todos, null, 2);
       } catch (err) {
