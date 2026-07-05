@@ -28,19 +28,22 @@ async function resolveTodos(selectors, opts = {}) {
 
   const results = [];
   for (const sel of selectors) {
-    const num = parseInt(sel);
-    if (!isNaN(num) && String(num) === sel.trim()) {
+    const cleaned = sel.replace(/^#+/, '').trim();
+    const num = parseInt(cleaned);
+    if (!isNaN(num) && String(num) === cleaned) {
       const byRow = todos.find(t => t._row === num);
       if (byRow) { results.push({ todo: byRow }); continue; }
       const byId = todos.find(t => t.id === num);
       if (byId) { results.push({ todo: byId }); continue; }
       results.push({ error: `Todo #${num} not found` });
     } else {
-      const q = sel.toLowerCase().trim();
-      const matches = todos.filter(t => t.title.toLowerCase().includes(q));
-      if (matches.length === 0) results.push({ error: `No todo matching "${sel}"` });
+      const q = cleaned;
+      const exact = todos.filter(t => t.title === q);
+      if (exact.length === 1) { results.push({ todo: exact[0] }); continue; }
+      const matches = todos.filter(t => t.title.includes(q));
+      if (matches.length === 0) results.push({ error: `No todo matching "${q}"` });
       else if (matches.length === 1) results.push({ todo: matches[0] });
-      else results.push({ error: `Multiple matches for "${sel}": ${matches.map(m => '#' + (m._row || m.id)).join(', ')}` });
+      else results.push({ error: `Multiple matches for "${q}": ${matches.map(m => '#' + (m._row || m.id)).join(', ')}` });
     }
   }
   return results;
