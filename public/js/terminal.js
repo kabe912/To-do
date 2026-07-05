@@ -241,6 +241,7 @@
         historyIndex = history.length;
         input.value = '';
         await executeCommand(cmd);
+        input.value = '';
         busy = false;
       }
     }
