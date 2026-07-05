@@ -7,6 +7,36 @@ const STATUS_LABELS = {
 
 const STATUS_VALUES = ['pending', 'in_progress', 'completed', 'learned'];
 
+async function resolveTodos(selectors) {
+  const todos = await API.listTodos();
+  const results = [];
+
+  for (const sel of selectors) {
+    const id = parseInt(sel);
+    if (!isNaN(id) && String(id) === sel.trim()) {
+      const match = todos.find(t => t.id === id);
+      results.push(match ? { todo: match } : { error: `Todo #${id} not found` });
+    } else {
+      const q = sel.toLowerCase().trim();
+      const matches = todos.filter(t => t.title.toLowerCase().includes(q));
+      if (matches.length === 0) {
+        results.push({ error: `No todo matching "${sel}"` });
+      } else if (matches.length === 1) {
+        results.push({ todo: matches[0] });
+      } else {
+        const ids = matches.map(m => `#${m.id}`).join(', ');
+        results.push({ error: `Multiple matches for "${sel}": ${ids}` });
+      }
+    }
+  }
+  return results;
+}
+
+async function resolveSingleTodo(sel) {
+  const res = await resolveTodos([sel]);
+  return res[0];
+}
+
 const COMMANDS = {
   help: {
     desc: 'Show available commands',
@@ -97,102 +127,77 @@ const COMMANDS = {
     }
   },
 
-  done: {
-    desc: 'Mark a todo as completed (set status = completed)',
-    usage: 'done <id> [id2 id3 ...]',
-    async execute(args) {
-      if (!args.length) return ' Usage: done <id>';
-      const results = [];
-      for (const arg of args) {
-        const id = parseInt(arg);
-        if (isNaN(id)) { results.push(` Invalid id: ${arg}`); continue; }
-        try {
-          const todo = await API.updateTodo(id, { status: 'completed', completed: true });
-          results.push(` Todo #${id} → completed ✓`);
-        } catch (err) {
-          results.push(` Todo #${id}: ${err.message}`);
-        }
+  async execOnIds(args, statusField, successMsg) {
+    if (!args.length) return;
+    const resolved = await resolveTodos(args);
+    const results = [];
+    for (const r of resolved) {
+      if (r.error) { results.push(` ${r.error}`); continue; }
+      try {
+        const update = typeof statusField === 'object' ? statusField : { status: statusField };
+        const todo = await API.updateTodo(r.todo.id, update);
+        results.push(successMsg ? successMsg(todo) : ` #${todo.id} → ${STATUS_LABELS[todo.status] || todo.status}`);
+      } catch (err) {
+        results.push(` #${r.todo.id}: ${err.message}`);
       }
-      return results.join('\n');
+    }
+    return results.join('\n');
+  },
+
+  done: {
+    desc: 'Mark a todo as completed',
+    usage: 'done <id|"title"> [more...]',
+    async execute(args) {
+      if (!args.length) return ' Usage: done <id | "title">';
+      return COMMANDS.execOnIds(args, { status: 'completed', completed: true }, t =>
+        ` #${t.id} "${t.title}" → completed ✓`);
     }
   },
 
   start: {
-    desc: 'Mark a todo as in progress (set status = in_progress)',
-    usage: 'start <id> [id2 id3 ...]',
+    desc: 'Mark a todo as in progress',
+    usage: 'start <id|"title"> [more...]',
     async execute(args) {
-      if (!args.length) return ' Usage: start <id>';
-      const results = [];
-      for (const arg of args) {
-        const id = parseInt(arg);
-        if (isNaN(id)) { results.push(` Invalid id: ${arg}`); continue; }
-        try {
-          const todo = await API.updateTodo(id, { status: 'in_progress' });
-          results.push(` Todo #${id} → learning in progress`);
-        } catch (err) {
-          results.push(` Todo #${id}: ${err.message}`);
-        }
-      }
-      return results.join('\n');
+      if (!args.length) return ' Usage: start <id | "title">';
+      return COMMANDS.execOnIds(args, { status: 'in_progress' }, t =>
+        ` #${t.id} "${t.title}" → learning`);
     }
   },
 
   learned: {
-    desc: 'Mark a todo as learned (set status = learned)',
-    usage: 'learned <id> [id2 id3 ...]',
+    desc: 'Mark a todo as learned',
+    usage: 'learned <id|"title"> [more...]',
     async execute(args) {
-      if (!args.length) return ' Usage: learned <id>';
-      const results = [];
-      for (const arg of args) {
-        const id = parseInt(arg);
-        if (isNaN(id)) { results.push(` Invalid id: ${arg}`); continue; }
-        try {
-          const todo = await API.updateTodo(id, { status: 'learned' });
-          results.push(` Todo #${id} → learned ✓`);
-        } catch (err) {
-          results.push(` Todo #${id}: ${err.message}`);
-        }
-      }
-      return results.join('\n');
+      if (!args.length) return ' Usage: learned <id | "title">';
+      return COMMANDS.execOnIds(args, { status: 'learned' }, t =>
+        ` #${t.id} "${t.title}" → learned ✓`);
     }
   },
 
   pending: {
-    desc: 'Reset a todo to pending (set status = pending)',
-    usage: 'pending <id> [id2 id3 ...]',
+    desc: 'Reset a todo to pending',
+    usage: 'pending <id|"title"> [more...]',
     async execute(args) {
-      if (!args.length) return ' Usage: pending <id>';
-      const results = [];
-      for (const arg of args) {
-        const id = parseInt(arg);
-        if (isNaN(id)) { results.push(` Invalid id: ${arg}`); continue; }
-        try {
-          const todo = await API.updateTodo(id, { status: 'pending' });
-          results.push(` Todo #${id} → pending`);
-        } catch (err) {
-          results.push(` Todo #${id}: ${err.message}`);
-        }
-      }
-      return results.join('\n');
+      if (!args.length) return ' Usage: pending <id | "title">';
+      return COMMANDS.execOnIds(args, { status: 'pending', completed: false }, t =>
+        ` #${t.id} "${t.title}" → pending`);
     }
   },
 
   status: {
-    desc: 'Change status of a todo (pending | in_progress | completed | learned)',
-    usage: 'status <id> <pending|in_progress|completed|learned>',
+    desc: 'Change status of a todo',
+    usage: 'status <id|"title"> <pending|in_progress|completed|learned>',
     async execute(args) {
-      if (args.length < 2) return ' Usage: status <id> <pending|in_progress|completed|learned>';
-      const id = parseInt(args[0]);
-      if (isNaN(id)) return ` Invalid id: ${args[0]}`;
+      if (args.length < 2) return ' Usage: status <id | "title"> <pending|in_progress|completed|learned>';
       const s = args[1].toLowerCase().replace(/-/g, '_');
       if (!STATUS_VALUES.includes(s)) return ' Status must be: pending, in_progress, completed, or learned';
 
+      const r = await resolveSingleTodo(args[0]);
+      if (r.error) return ` ${r.error}`;
+      const completedVal = (s === 'completed' || s === 'learned') ? true : (s === 'pending' ? false : undefined);
       try {
-        const updated = await API.updateTodo(id, {
-          status: s,
-          ...(s === 'completed' ? { completed: true } : s === 'pending' ? { completed: false } : {}),
-        });
-        return ` Todo #${updated.id} status → ${STATUS_LABELS[s]}`;
+        const todo = await API.updateTodo(r.todo.id, { status: s, ...(completedVal !== undefined ? { completed: completedVal } : {}) });
+        return ` #${todo.id} "${todo.title}" → ${STATUS_LABELS[s]}`;
       } catch (err) {
         return ` Error: ${err.message}`;
       }
@@ -201,19 +206,15 @@ const COMMANDS = {
 
   rm: {
     desc: 'Delete a todo',
-    usage: 'rm <id> [id2 id3 ...]',
+    usage: 'rm <id|"title"> [more...]',
     async execute(args) {
-      if (!args.length) return ' Usage: rm <id>';
+      if (!args.length) return ' Usage: rm <id | "title">';
+      const resolved = await resolveTodos(args);
       const results = [];
-      for (const arg of args) {
-        const id = parseInt(arg);
-        if (isNaN(id)) { results.push(` Invalid id: ${arg}`); continue; }
-        try {
-          await API.deleteTodo(id);
-          results.push(` Deleted todo #${id}`);
-        } catch (err) {
-          results.push(` Todo #${id}: ${err.message}`);
-        }
+      for (const r of resolved) {
+        if (r.error) { results.push(` ${r.error}`); continue; }
+        try { await API.deleteTodo(r.todo.id); results.push(` Deleted #${r.todo.id} "${r.todo.title}"`); }
+        catch (err) { results.push(` #${r.todo.id}: ${err.message}`); }
       }
       return results.join('\n');
     }
@@ -221,12 +222,13 @@ const COMMANDS = {
 
   edit: {
     desc: 'Edit a todo',
-    usage: 'edit <id> "new title" [-s status] [-p priority] [-d date] [-c category] [--desc "description"]',
+    usage: 'edit <id|"title"> "new title" [-s status] [-p priority] [-d date] [-c category] [--desc "description"]',
     async execute(args) {
-      if (args.length < 2) return ' Usage: edit <id> "new title" [-s status] [-p priority] [-d date] [-c category]';
+      if (args.length < 2) return ' Usage: edit <id | "title"> "new title" [-s status] [-p priority] [-d date] [-c category]';
 
-      const id = parseInt(args[0]);
-      if (isNaN(id)) return ` Invalid id: ${args[0]}`;
+      const r = await resolveSingleTodo(args[0]);
+      if (r.error) return ` ${r.error}`;
+      const todoId = r.todo.id;
 
       const updates = {};
       let title = '';
@@ -251,8 +253,8 @@ const COMMANDS = {
       if (title) updates.title = title;
 
       try {
-        const updated = await API.updateTodo(id, updates);
-        return ` Updated todo #${updated.id}: "${updated.title}" [${STATUS_LABELS[updated.status] || updated.status}]`;
+        const updated = await API.updateTodo(todoId, updates);
+        return ` Updated #${updated.id}: "${updated.title}" [${STATUS_LABELS[updated.status] || updated.status}]`;
       } catch (err) {
         return ` Error: ${err.message}`;
       }
@@ -261,17 +263,17 @@ const COMMANDS = {
 
   priority: {
     desc: 'Change priority of a todo',
-    usage: 'priority <id> <high|medium|low>',
+    usage: 'priority <id|"title"> <high|medium|low>',
     async execute(args) {
-      if (args.length < 2) return ' Usage: priority <id> <high|medium|low>';
-      const id = parseInt(args[0]);
-      if (isNaN(id)) return ` Invalid id: ${args[0]}`;
+      if (args.length < 2) return ' Usage: priority <id | "title"> <high|medium|low>';
       const pri = args[1].toLowerCase();
       if (!['high', 'medium', 'low'].includes(pri)) return ' Priority must be: high, medium, or low';
 
+      const r = await resolveSingleTodo(args[0]);
+      if (r.error) return ` ${r.error}`;
       try {
-        const updated = await API.updateTodo(id, { priority: pri });
-        return ` Todo #${updated.id} priority set to ${pri}`;
+        const updated = await API.updateTodo(r.todo.id, { priority: pri });
+        return ` #${updated.id} "${updated.title}" priority → ${pri}`;
       } catch (err) {
         return ` Error: ${err.message}`;
       }
