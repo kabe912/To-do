@@ -49,7 +49,7 @@
   }
 
   function clearScreen() {
-    output.innerHTML = '';
+    output.innerHTML = '<div class="line"><span class="dim">-- screen cleared --</span></div>';
   }
 
   function showTable(todos) {
@@ -151,10 +151,9 @@
   /* ── Suggestions dropdown ── */
   function buildSuggestions(filter) {
     const q = filter.toLowerCase();
-    const items = Object.entries(COMMANDS)
+    return Object.entries(COMMANDS)
       .filter(([name]) => name.includes(q))
       .map(([name, cmd]) => ({ name, desc: cmd.desc }));
-    return items;
   }
 
   function renderSuggestions(items) {
@@ -169,40 +168,42 @@
 
     const maxRows = 8;
     const shown = items.slice(0, maxRows);
-    const remainder = items.length - maxRows;
 
     shown.forEach((item, i) => {
       const el = document.createElement('div');
       el.className = 'suggestion-item';
       el.innerHTML = `
-        <span class="cmd-name">/${item.name}</span>
+        <span class="cmd-name">/${escapeHtml(item.name)}</span>
         <span class="cmd-desc">${escapeHtml(item.desc)}</span>
         <span class="cmd-hotkey">⏎</span>`;
-      el.addEventListener('click', () => selectSuggestion(i));
+      el.addEventListener('mousedown', (e) => { e.preventDefault(); selectSuggestion(i); });
       el.addEventListener('mouseenter', () => setActiveSuggestion(i));
       suggestions.appendChild(el);
     });
 
-    if (remainder > 0) {
+    if (items.length > maxRows) {
       const el = document.createElement('div');
       el.className = 'suggestion-item';
-      el.innerHTML = `<span class="cmd-desc" style="text-align:center;color:#555;">… ${remainder} more</span>`;
+      el.innerHTML = `<span class="cmd-desc" style="text-align:center;color:#555;">${items.length} commands — type to filter</span>`;
       suggestions.appendChild(el);
     }
 
     suggestions.classList.remove('hidden');
+    if (shown.length > 0) setActiveSuggestion(0);
   }
 
   function setActiveSuggestion(idx) {
-    const items = suggestions.querySelectorAll('.suggestion-item');
-    items.forEach((el, i) => el.classList.toggle('active', i === idx));
+    const els = suggestions.querySelectorAll('.suggestion-item');
+    els.forEach((el, i) => el.classList.toggle('active', i === idx));
     suggestionIndex = idx;
+    if (els[idx]) els[idx].scrollIntoView({ block: 'nearest' });
   }
 
   function selectSuggestion(idx) {
     const item = suggestionItems[idx];
     if (!item) return;
     input.value = item.name + ' ';
+    input.selectionStart = input.selectionEnd = input.value.length;
     hideSuggestions();
     input.focus();
   }
@@ -248,42 +249,42 @@
     }
 
     /* ── ArrowUp ── */
-    else if (e.key === 'ArrowUp' && isOpen) {
+    else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      const items = suggestions.querySelectorAll('.suggestion-item');
-      const idx = suggestionIndex < 0 ? Math.min(suggestionItems.length, items.length) - 1 : suggestionIndex - 1;
-      if (idx >= 0) setActiveSuggestion(idx);
-    }
-
-    else if (e.key === 'ArrowUp' && !isOpen) {
-      e.preventDefault();
-      if (history.length) {
-        if (historyIndex === history.length) commandCache = cmd;
-        if (historyIndex > 0) { historyIndex--; input.value = history[historyIndex]; }
+      if (isOpen) {
+        const els = suggestions.querySelectorAll('.suggestion-item');
+        const prev = suggestionIndex <= 0 ? els.length - 1 : suggestionIndex - 1;
+        if (prev >= 0) setActiveSuggestion(prev);
+      } else {
+        if (history.length) {
+          if (historyIndex === history.length) commandCache = cmd;
+          if (historyIndex > 0) { historyIndex--; input.value = history[historyIndex]; }
+        }
       }
     }
 
     /* ── ArrowDown ── */
-    else if (e.key === 'ArrowDown' && isOpen) {
+    else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      const items = suggestions.querySelectorAll('.suggestion-item');
-      const idx = suggestionIndex + 1;
-      if (idx < items.length) setActiveSuggestion(idx);
-    }
-
-    else if (e.key === 'ArrowDown' && !isOpen) {
-      e.preventDefault();
-      if (historyIndex < history.length) {
-        historyIndex++;
-        input.value = historyIndex === history.length ? (commandCache || '') : history[historyIndex];
+      if (isOpen) {
+        const els = suggestions.querySelectorAll('.suggestion-item');
+        const next = suggestionIndex >= els.length - 1 ? 0 : suggestionIndex + 1;
+        if (next < els.length) setActiveSuggestion(next);
+      } else {
+        if (historyIndex < history.length) {
+          historyIndex++;
+          input.value = historyIndex === history.length ? (commandCache || '') : history[historyIndex];
+        }
       }
     }
 
     /* ── Tab ── */
     else if (e.key === 'Tab') {
       e.preventDefault();
-      if (isOpen && suggestionIndex >= 0 && suggestionItems[suggestionIndex]) {
-        selectSuggestion(suggestionIndex);
+      if (isOpen) {
+        if (suggestionIndex >= 0 && suggestionItems[suggestionIndex]) {
+          selectSuggestion(suggestionIndex);
+        }
         return;
       }
       const completions = getCompletions(cmd);
@@ -294,12 +295,18 @@
       }
     }
 
-    /* ── Escape ── */
+    /* ── Ctrl+L → clear ── */
+    else if (e.key === 'l' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      clearScreen();
+    }
+
+    /* ── Escape → close suggestions ── */
     else if (e.key === 'Escape') {
       if (isOpen) { e.preventDefault(); hideSuggestions(); }
     }
 
-    /* ── Backspace when input empty: hide suggestions ── */
+    /* ── Backspace at "/" → hide if input becomes empty ── */
     else if (e.key === 'Backspace' && cmd.length <= 1) {
       hideSuggestions();
     }
@@ -308,6 +315,8 @@
   document.addEventListener('click', (e) => {
     if (document.activeElement !== input && !e.target.closest('#suggestions')) {
       input.focus();
+    }
+    if (!e.target.closest('#suggestions') && !e.target.closest('#input-line')) {
       hideSuggestions();
     }
   });
