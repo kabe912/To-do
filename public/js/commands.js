@@ -15,6 +15,12 @@ const CACHE_TTL = 1500;
 
 function invalidateCache() { _todoCache = null; }
 
+function formatDate(d) {
+  if (!d) return '';
+  if (d.includes('T')) d = d.split('T')[0];
+  return d;
+}
+
 async function getTodos() {
   if (_todoCache && Date.now() - _cacheTime < CACHE_TTL) return _todoCache;
   _todoCache = await API.listTodos();
@@ -170,7 +176,7 @@ const COMMANDS = {
       try {
         const created = await API.addTodo(todo);
         invalidateCache();
-        return ` Created #${created.id}: "${created.title}" [${created.due_date}]`;
+        return ` Created #${created.id}: "${created.title}" [${formatDate(created.due_date)}]`;
       } catch (err) {
         return ` Error: ${err.message}`;
       }

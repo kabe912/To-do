@@ -108,7 +108,7 @@
           <div class="todo-cell title${t.status === 'completed' || t.status === 'learned' ? ' done' : ''}"><span class="title-text">${escapeHtml(t.title)}</span></div>
           <div class="todo-cell status"><span class="status-badge ${statusClass}">${statusLabel}</span></div>
           <div class="todo-cell priority ${priClass}">${t.priority.toUpperCase().substring(0, 4)}</div>
-          <div class="todo-cell due">${t.due_date || ''}</div>
+          <div class="todo-cell due">${typeof formatDate === 'function' ? formatDate(t.due_date) : (t.due_date || '')}</div>
           <div class="todo-cell category">${escapeHtml(t.category || '')}</div>
         `;
         output.appendChild(row);
