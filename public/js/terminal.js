@@ -56,6 +56,8 @@
   function showTable(todos) {
     if (!todos || !todos.length) return;
 
+    todos.forEach((t, i) => { if (t._row === undefined) t._row = i + 1; });
+
     const statusLabels = { pending: 'pending', in_progress: 'learn', completed: 'done', learned: 'known' };
     const statusColors = { pending: 'status-pending', in_progress: 'status-progress', completed: 'status-done', learned: 'status-learned' };
 
@@ -81,7 +83,7 @@
       const sc = statusColors[t.status] || 'status-pending';
       const sl = statusLabels[t.status] || t.status;
       row.innerHTML = `
-        <div class="todo-cell id">${t.id}</div>
+        <div class="todo-cell id">${t._row || t.id}</div>
         <div class="todo-cell title${t.status === 'completed' || t.status === 'learned' ? ' done' : ''}"><span class="title-text">${escapeHtml(t.title)}</span></div>
         <div class="todo-cell status"><span class="status-badge ${sc}">${sl}</span></div>
         <div class="todo-cell priority ${priClass}">${t.priority.toUpperCase().substring(0, 4)}</div>
@@ -143,9 +145,12 @@
   /* ── Suggestions dropdown ── */
   function buildSuggestions(filter) {
     const q = filter.toLowerCase();
-    return Object.entries(COMMANDS)
-      .filter(([name]) => name.includes(q))
-      .map(([name, cmd]) => ({ name, desc: cmd.desc }));
+    let entries = Object.entries(COMMANDS);
+    if (q) {
+      const start = entries.filter(([name]) => name.startsWith(q));
+      entries = start.length > 0 ? start : entries.filter(([name]) => name.includes(q));
+    }
+    return entries.map(([name, cmd]) => ({ name, desc: cmd.desc }));
   }
 
   function renderSuggestions(items) {
@@ -165,7 +170,7 @@
       const el = document.createElement('div');
       el.className = 'suggestion-item';
       el.innerHTML = `
-        <span class="cmd-name">/${escapeHtml(item.name)}</span>
+        <span class="cmd-name">${escapeHtml(item.name)}</span>
         <span class="cmd-desc">${escapeHtml(item.desc)}</span>
         <span class="cmd-hotkey">⏎</span>`;
       el.addEventListener('mousedown', (e) => { e.preventDefault(); selectSuggestion(i); });
@@ -208,13 +213,26 @@
 
   function updateSuggestions() {
     const val = input.value;
-    if (val.startsWith('/')) {
-      const filter = val.slice(1).trim();
+    const noSpaceYet = !val.includes(' ');
+    if (noSpaceYet) {
+      const filter = val.startsWith('/') ? val.slice(1) : val;
       const items = buildSuggestions(filter);
       renderSuggestions(items);
     } else {
       hideSuggestions();
     }
+  }
+
+  async function submitInput() {
+    const trimmed = input.value.trim();
+    if (!trimmed) return;
+    busy = true;
+    history.push(trimmed);
+    historyIndex = history.length;
+    input.value = '';
+    await executeCommand(trimmed);
+    input.value = '';
+    busy = false;
   }
 
   input.addEventListener('input', updateSuggestions);
@@ -230,20 +248,18 @@
       e.preventDefault();
       if (isOpen) {
         if (suggestionIndex >= 0 && suggestionItems[suggestionIndex]) {
-          selectSuggestion(suggestionIndex);
+          const selected = suggestionItems[suggestionIndex];
+          if (input.value.trim() === selected.name) {
+            hideSuggestions();
+            await submitInput();
+          } else {
+            selectSuggestion(suggestionIndex);
+          }
         }
         return;
       }
       hideSuggestions();
-      if (cmd.trim()) {
-        busy = true;
-        history.push(cmd.trim());
-        historyIndex = history.length;
-        input.value = '';
-        await executeCommand(cmd);
-        input.value = '';
-        busy = false;
-      }
+      await submitInput();
     }
 
     /* ── ArrowUp ── */
@@ -278,16 +294,11 @@
       }
     }
 
-    /* ── Tab ── use same suggestion logic */
+    /* ── Tab ── */
     else if (e.key === 'Tab') {
       e.preventDefault();
       if (isOpen && suggestionIndex >= 0 && suggestionItems[suggestionIndex]) {
         selectSuggestion(suggestionIndex);
-        return;
-      }
-      if (!cmd.includes(' ')) {
-        const m = Object.keys(COMMANDS).filter(c => c.startsWith(cmd));
-        if (m.length === 1) input.value = m[0] + ' ';
       }
     }
 
@@ -300,11 +311,6 @@
     /* ── Escape ── */
     else if (e.key === 'Escape') {
       if (isOpen) { e.preventDefault(); hideSuggestions(); }
-    }
-
-    /* ── Backspace when empty or only "/" ── */
-    else if (e.key === 'Backspace' && cmd.length <= 1) {
-      hideSuggestions();
     }
   });
 

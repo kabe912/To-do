@@ -6,35 +6,53 @@ const STATUS_LABELS = {
 };
 
 const STATUS_VALUES = ['pending', 'in_progress', 'completed', 'learned'];
+const ARCHIVE_STATUSES = ['completed', 'learned'];
+const ACTIVE_STATUSES = ['pending', 'in_progress'];
 
-async function resolveTodos(selectors) {
-  const todos = await API.listTodos();
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+}
+
+async function resolveTodos(selectors, opts = {}) {
+  const listAll = opts.all || false;
+  let todos = await API.listTodos();
+  if (!listAll) {
+    const activeIds = todos.filter(t => ACTIVE_STATUSES.includes(t.status)).map(t => t.id);
+    todos.forEach(t => { t._row = activeIds.indexOf(t.id) >= 0 ? activeIds.indexOf(t.id) + 1 : null; });
+  } else {
+    todos.forEach((t, i) => { t._row = i + 1; });
+  }
+
   const results = [];
-
   for (const sel of selectors) {
-    const id = parseInt(sel);
-    if (!isNaN(id) && String(id) === sel.trim()) {
-      const match = todos.find(t => t.id === id);
-      results.push(match ? { todo: match } : { error: `Todo #${id} not found` });
+    const num = parseInt(sel);
+    if (!isNaN(num) && String(num) === sel.trim()) {
+      const byRow = todos.find(t => t._row === num);
+      if (byRow) { results.push({ todo: byRow }); continue; }
+      const byId = todos.find(t => t.id === num);
+      if (byId) { results.push({ todo: byId }); continue; }
+      results.push({ error: `Todo #${num} not found` });
     } else {
       const q = sel.toLowerCase().trim();
       const matches = todos.filter(t => t.title.toLowerCase().includes(q));
-      if (matches.length === 0) {
-        results.push({ error: `No todo matching "${sel}"` });
-      } else if (matches.length === 1) {
-        results.push({ todo: matches[0] });
-      } else {
-        const ids = matches.map(m => `#${m.id}`).join(', ');
-        results.push({ error: `Multiple matches for "${sel}": ${ids}` });
-      }
+      if (matches.length === 0) results.push({ error: `No todo matching "${sel}"` });
+      else if (matches.length === 1) results.push({ todo: matches[0] });
+      else results.push({ error: `Multiple matches for "${sel}": ${matches.map(m => '#' + (m._row || m.id)).join(', ')}` });
     }
   }
   return results;
 }
 
-async function resolveSingleTodo(sel) {
-  const res = await resolveTodos([sel]);
+async function resolveSingleTodo(sel, opts) {
+  const res = await resolveTodos([sel], opts);
   return res[0];
+}
+
+function addRowNumbers(todos) {
+  return todos.map((t, i) => { t._row = i + 1; return t; });
 }
 
 const COMMANDS = {
@@ -44,32 +62,33 @@ const COMMANDS = {
     async execute(args) {
       if (args.length) {
         const cmd = args[0];
-        if (COMMANDS[cmd]) {
-          return ` ${cmd} — ${COMMANDS[cmd].desc}\n Usage: ${COMMANDS[cmd].usage}`;
-        }
+        if (COMMANDS[cmd]) return ` ${cmd} — ${COMMANDS[cmd].desc}\n Usage: ${COMMANDS[cmd].usage}`;
         return ` Unknown command: ${cmd}`;
       }
-
       const lines = [' Available commands:\n'];
       for (const [name, cmd] of Object.entries(COMMANDS)) {
         lines.push(`  ${name.padEnd(14)} ${cmd.desc}`);
       }
       lines.push('\n Tips:');
       lines.push('  ↑/↓  Navigate command history');
-      lines.push('  Tab  Autocomplete commands');
+      lines.push('  /    Show command suggestions');
       return lines.join('\n');
     }
   },
 
   ls: {
-    desc: 'List all todos',
-    usage: 'ls [--status pending|in_progress|completed|learned] [--done] [--active] [--priority high|medium|low] [--category NAME] [--search TEXT]',
+    desc: 'List active todos (pending + in_progress)',
+    usage: 'ls [--all] [--archived] [--status pending|in_progress] [--priority high|medium|low] [--category NAME] [--search TEXT]',
     async execute(args) {
       const filters = {};
+      let showAll = false;
+      let showArchived = false;
+
       for (let i = 0; i < args.length; i++) {
         switch (args[i]) {
+          case '--all': showAll = true; break;
+          case '--archived': showArchived = true; break;
           case '--done': filters.status = 'completed'; break;
-          case '--active': filters.status = 'pending'; break;
           case '--status': filters.status = args[++i]; break;
           case '--priority': filters.priority = args[++i]; break;
           case '--category': filters.category = args[++i]; break;
@@ -78,11 +97,21 @@ const COMMANDS = {
       }
 
       try {
-        const todos = await API.listTodos(filters);
-        if (!todos.length) {
-          return ' No todos found. Use add to create one.';
+        let todos = await API.listTodos(filters);
+
+        if (!showAll && !showArchived && !filters.status) {
+          todos = todos.filter(t => ACTIVE_STATUSES.includes(t.status));
         }
-        return { todos };
+        if (showArchived) {
+          todos = todos.filter(t => ARCHIVE_STATUSES.includes(t.status));
+        }
+        todos = addRowNumbers(todos);
+
+        if (!todos.length) {
+          if (showArchived) return ' No archived todos.';
+          return ' No active todos. Use add to create one.';
+        }
+        return { todos, showRow: true };
       } catch (err) {
         return ` Error: ${err.message}`;
       }
@@ -90,13 +119,13 @@ const COMMANDS = {
   },
 
   add: {
-    desc: 'Add a new todo',
-    usage: 'add "Title" [-s pending|in_progress|completed|learned] [-p high|medium|low] [-d YYYY-MM-DD] [-c CATEGORY] [--desc "description"]',
+    desc: 'Add a new todo (auto due_date = today)',
+    usage: 'add "Title" [-s pending|in_progress] [-p high|medium|low] [-d YYYY-MM-DD] [-c CATEGORY] [--desc "description"]',
     async execute(args) {
-      if (!args.length) return ' Usage: add "Title" [-s pending|in_progress|completed|learned] [-p high|medium|low] [-d YYYY-MM-DD] [-c CATEGORY]';
+      if (!args.length) return ' Usage: add "Title" [-s pending|in_progress] [-p high|medium|low] [-d YYYY-MM-DD] [-c CATEGORY]';
 
       let title = '';
-      const todo = { status: 'pending' };
+      const todo = { status: 'pending', due_date: todayStr() };
       let i = 0;
 
       if (args[i] && !args[i].startsWith('-')) {
@@ -120,23 +149,23 @@ const COMMANDS = {
 
       try {
         const created = await API.addTodo(todo);
-        return ` Created todo #${created.id}: "${created.title}" [${STATUS_LABELS[created.status] || created.status}]`;
+        return ` Created #${created.id}: "${created.title}" [${created.due_date}]`;
       } catch (err) {
         return ` Error: ${err.message}`;
       }
     }
   },
 
-  async execOnIds(args, statusField, successMsg) {
+  async execOnIds(args, statusField, successMsg, opts) {
     if (!args.length) return;
-    const resolved = await resolveTodos(args);
+    const resolved = await resolveTodos(args, opts);
     const results = [];
     for (const r of resolved) {
       if (r.error) { results.push(` ${r.error}`); continue; }
       try {
         const update = typeof statusField === 'object' ? statusField : { status: statusField };
         const todo = await API.updateTodo(r.todo.id, update);
-        results.push(successMsg ? successMsg(todo) : ` #${todo.id} → ${STATUS_LABELS[todo.status] || todo.status}`);
+        results.push(successMsg ? successMsg(todo) : ` #${r.todo.id} → ${STATUS_LABELS[todo.status] || todo.status}`);
       } catch (err) {
         results.push(` #${r.todo.id}: ${err.message}`);
       }
@@ -145,59 +174,83 @@ const COMMANDS = {
   },
 
   done: {
-    desc: 'Mark a todo as completed',
-    usage: 'done <id|"title"> [more...]',
+    desc: 'Mark a todo as completed (archived from active list)',
+    usage: 'done <row|id|"title"> [more...]',
     async execute(args) {
-      if (!args.length) return ' Usage: done <id | "title">';
+      if (!args.length) return ' Usage: done <row | id | "title">';
       return COMMANDS.execOnIds(args, { status: 'completed', completed: true }, t =>
-        ` #${t.id} "${t.title}" → completed ✓`);
+        ` ✓ #${t.id} "${t.title}" → done (archived)`);
     }
   },
 
   start: {
     desc: 'Mark a todo as in progress',
-    usage: 'start <id|"title"> [more...]',
+    usage: 'start <row|id|"title"> [more...]',
     async execute(args) {
-      if (!args.length) return ' Usage: start <id | "title">';
+      if (!args.length) return ' Usage: start <row | id | "title">';
       return COMMANDS.execOnIds(args, { status: 'in_progress' }, t =>
-        ` #${t.id} "${t.title}" → learning`);
+        ` → #${t.id} "${t.title}" learning`);
     }
   },
 
   learned: {
-    desc: 'Mark a todo as learned',
-    usage: 'learned <id|"title"> [more...]',
+    desc: 'Mark a todo as learned (archived from active list)',
+    usage: 'learned <row|id|"title"> [more...]',
     async execute(args) {
-      if (!args.length) return ' Usage: learned <id | "title">';
+      if (!args.length) return ' Usage: learned <row | id | "title">';
       return COMMANDS.execOnIds(args, { status: 'learned' }, t =>
-        ` #${t.id} "${t.title}" → learned ✓`);
+        ` ✓ #${t.id} "${t.title}" → learned (archived)`);
     }
   },
 
   pending: {
     desc: 'Reset a todo to pending',
-    usage: 'pending <id|"title"> [more...]',
+    usage: 'pending <row|id|"title"> [more...]',
     async execute(args) {
-      if (!args.length) return ' Usage: pending <id | "title">';
+      if (!args.length) return ' Usage: pending <row | id | "title">';
       return COMMANDS.execOnIds(args, { status: 'pending', completed: false }, t =>
-        ` #${t.id} "${t.title}" → pending`);
+        ` → #${t.id} "${t.title}" pending`);
     }
   },
 
   status: {
     desc: 'Change status of a todo',
-    usage: 'status <id|"title"> <pending|in_progress|completed|learned>',
+    usage: 'status <row|id|"title"> <pending|in_progress|completed|learned>',
     async execute(args) {
-      if (args.length < 2) return ' Usage: status <id | "title"> <pending|in_progress|completed|learned>';
+      if (args.length < 2) return ' Usage: status <row | id | "title"> <pending|in_progress|completed|learned>';
       const s = args[1].toLowerCase().replace(/-/g, '_');
       if (!STATUS_VALUES.includes(s)) return ' Status must be: pending, in_progress, completed, or learned';
 
       const r = await resolveSingleTodo(args[0]);
       if (r.error) return ` ${r.error}`;
-      const completedVal = (s === 'completed' || s === 'learned') ? true : (s === 'pending' ? false : undefined);
+      const cv = (s === 'completed' || s === 'learned') ? true : (s === 'pending' ? false : undefined);
       try {
-        const todo = await API.updateTodo(r.todo.id, { status: s, ...(completedVal !== undefined ? { completed: completedVal } : {}) });
+        const todo = await API.updateTodo(r.todo.id, { status: s, ...(cv !== undefined ? { completed: cv } : {}) });
         return ` #${todo.id} "${todo.title}" → ${STATUS_LABELS[s]}`;
+      } catch (err) {
+        return ` Error: ${err.message}`;
+      }
+    }
+  },
+
+  archive: {
+    desc: 'List archived todos (completed + learned)',
+    usage: 'archive',
+    async execute() {
+      return COMMANDS.ls.execute(['--archived']);
+    }
+  },
+
+  purge: {
+    desc: 'Delete all archived todos (completed + learned)',
+    usage: 'purge',
+    async execute() {
+      try {
+        const todos = await API.listTodos();
+        const archived = todos.filter(t => ARCHIVE_STATUSES.includes(t.status));
+        if (!archived.length) return ' No archived todos to purge.';
+        for (const t of archived) await API.deleteTodo(t.id);
+        return ` Purged ${archived.length} archived todo(s).`;
       } catch (err) {
         return ` Error: ${err.message}`;
       }
@@ -206,9 +259,9 @@ const COMMANDS = {
 
   rm: {
     desc: 'Delete a todo',
-    usage: 'rm <id|"title"> [more...]',
+    usage: 'rm <row|id|"title"> [more...]',
     async execute(args) {
-      if (!args.length) return ' Usage: rm <id | "title">';
+      if (!args.length) return ' Usage: rm <row | id | "title">';
       const resolved = await resolveTodos(args);
       const results = [];
       for (const r of resolved) {
@@ -222,9 +275,9 @@ const COMMANDS = {
 
   edit: {
     desc: 'Edit a todo',
-    usage: 'edit <id|"title"> "new title" [-s status] [-p priority] [-d date] [-c category] [--desc "description"]',
+    usage: 'edit <row|id|"title"> "new title" [-s status] [-p priority] [-d date] [-c category] [--desc "description"]',
     async execute(args) {
-      if (args.length < 2) return ' Usage: edit <id | "title"> "new title" [-s status] [-p priority] [-d date] [-c category]';
+      if (args.length < 2) return ' Usage: edit <row | id | "title"> "new title" ...';
 
       const r = await resolveSingleTodo(args[0]);
       if (r.error) return ` ${r.error}`;
@@ -234,9 +287,7 @@ const COMMANDS = {
       let title = '';
       let i = 1;
 
-      if (!args[i].startsWith('-')) {
-        title = args[i++];
-      }
+      if (!args[i].startsWith('-')) { title = args[i++]; }
 
       while (i < args.length) {
         switch (args[i]) {
@@ -254,7 +305,7 @@ const COMMANDS = {
 
       try {
         const updated = await API.updateTodo(todoId, updates);
-        return ` Updated #${updated.id}: "${updated.title}" [${STATUS_LABELS[updated.status] || updated.status}]`;
+        return ` Updated #${updated.id}: "${updated.title}"`;
       } catch (err) {
         return ` Error: ${err.message}`;
       }
@@ -263,9 +314,9 @@ const COMMANDS = {
 
   priority: {
     desc: 'Change priority of a todo',
-    usage: 'priority <id|"title"> <high|medium|low>',
+    usage: 'priority <row|id|"title"> <high|medium|low>',
     async execute(args) {
-      if (args.length < 2) return ' Usage: priority <id | "title"> <high|medium|low>';
+      if (args.length < 2) return ' Usage: priority <row | id | "title"> <high|medium|low>';
       const pri = args[1].toLowerCase();
       if (!['high', 'medium', 'low'].includes(pri)) return ' Priority must be: high, medium, or low';
 
@@ -285,9 +336,7 @@ const COMMANDS = {
     usage: 'search <keyword>',
     async execute(args) {
       if (!args.length) return ' Usage: search <keyword>';
-      const keyword = args.join(' ');
-      const result = await COMMANDS.ls.execute(['--search', keyword]);
-      return result;
+      return COMMANDS.ls.execute(['--search', args.join(' '), '--all']);
     }
   },
 
@@ -304,15 +353,14 @@ const COMMANDS = {
       try {
         const s = await API.getStats();
         const pct = s.total ? (s.completed / s.total * 100).toFixed(1) : '0.0';
-        const learning = s.in_progress || 0;
-        const known = s.learned || 0;
         return [
           ' Statistics:',
           `  Total:        ${s.total}`,
+          `  Active:       ${(s.pending || 0) + (s.in_progress || 0)}`,
           `  Pending:      ${s.pending || 0}`,
-          `  In Progress:  ${learning}`,
+          `  In Progress:  ${s.in_progress || 0}`,
           `  Completed:    ${s.completed}  (${pct}%)`,
-          `  Learned:      ${known}`,
+          `  Learned:      ${s.learned || 0}`,
           `  Categories:   ${s.categories}`,
         ].join('\n');
       } catch (err) {
@@ -322,7 +370,7 @@ const COMMANDS = {
   },
 
   share: {
-    desc: 'Create a shareable link for your todos',
+    desc: 'Create a shareable link',
     usage: 'share [--ids 1,2,3] [--password SECRET] [--days 7]',
     async execute(args) {
       const data = {};
@@ -333,15 +381,9 @@ const COMMANDS = {
           case '--days': data.expires_in_days = parseInt(args[++i]); break;
         }
       }
-
       try {
         const link = await API.createShareLink(data);
-        return [
-          ` Share link created!`,
-          ` URL: ${link.url}`,
-          ` Token: ${link.token}`,
-          data.password ? ' (password protected)' : ' (public)',
-        ].join('\n');
+        return [` Share link created!`, ` URL: ${link.url}`, data.password ? ' (password protected)' : ' (public)'].join('\n');
       } catch (err) {
         return ` Error: ${err.message}`;
       }
