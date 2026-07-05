@@ -191,6 +191,7 @@
   function selectSuggestion(idx) {
     const item = suggestionItems[idx];
     if (!item) return;
+    _skipUpdate = true;
     input.value = item.name + ' ';
     hideSuggestions();
     input.focus();
@@ -205,9 +206,11 @@
 
   let _suggestionTimer = null;
   let _justSubmitted = false;
+  let _skipUpdate = false;
 
   function renderSuggestionsForInput() {
     if (_justSubmitted) { _justSubmitted = false; return; }
+    if (_skipUpdate) { _skipUpdate = false; return; }
     const val = input.value;
     if (val.startsWith('/')) {
       const filter = val.slice(1).trim();
