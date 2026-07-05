@@ -52,63 +52,7 @@ const COMMANDS = {
         if (!todos.length) {
           return ' No todos found. Use add to create one.';
         }
-
-        const rows = [
-          { id: '#', title: 'Title', status: 'Status', priority: 'Pri', due: 'Due', category: 'Cat' },
-          ...todos.map(t => ({
-            id: t.id,
-            title: t.title,
-            status: STATUS_LABELS[t.status] || t.status,
-            priority: t.priority.toUpperCase().substring(0, 4),
-            due: t.due_date || '',
-            category: t.category || '',
-            _status: t.status,
-            _pri: t.priority,
-          })),
-        ];
-
-        const colWidths = {
-          id: Math.max(...rows.map(r => String(r.id).length)) + 2,
-          title: Math.min(Math.max(...rows.map(r => r.title.length)) + 2, 50),
-          status: Math.max(...rows.map(r => r.status.length)) + 2,
-          priority: Math.max(...rows.map(r => r.priority.length)) + 2,
-          due: Math.max(...rows.map(r => r.due.length)) + 2,
-          category: Math.max(...rows.map(r => r.category.length)) + 2,
-        };
-
-        const hline = ` ${'─'.repeat(Object.values(colWidths).reduce((a, b) => a + b, 0) + 5)}`;
-
-        let out = hline + '\n';
-
-        const renderRow = (r, isHeader) => {
-          const cells = [
-            String(r.id).padStart(colWidths.id - 1),
-            r.title.padEnd(colWidths.title),
-            r.status.padEnd(colWidths.status),
-            r.priority.padEnd(colWidths.priority),
-            r.due.padEnd(colWidths.due),
-            r.category.padEnd(colWidths.category),
-          ];
-          if (isHeader) return ` ${cells.join(' ')}`;
-
-          const style = r._status === 'completed' || r._status === 'learned' ?
-            cells.map((c, i) => i === 1 ? c.replace(/./g, '─') : c).join(' ') :
-            cells.join(' ');
-
-          return ` ${style}`;
-        };
-
-        rows.forEach((r, i) => {
-          if (i === 0) {
-            out += renderRow(r, true) + '\n';
-            out += hline + '\n';
-          } else {
-            out += renderRow(r, false) + '\n';
-          }
-        });
-
-        out += hline;
-        return { raw: out, todos };
+        return { todos };
       } catch (err) {
         return ` Error: ${err.message}`;
       }

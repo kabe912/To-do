@@ -11,6 +11,7 @@
   let commandCache = '';
   let suggestionIndex = -1;
   let suggestionItems = [];
+  let busy = false;
 
   const ANSI_MAP = {
     '\x1b[91m': 'red', '\x1b[92m': 'green', '\x1b[93m': 'yellow',
@@ -35,7 +36,7 @@
     output.scrollTop = output.scrollHeight;
   }
 
-  function addPromptAndCommand(cmd) {
+  function addPrompt(cmd) {
     const div = document.createElement('div');
     div.className = 'line';
     div.innerHTML = `<span class="green">$</span> ${escapeHtml(cmd)}`;
@@ -98,9 +99,6 @@
       addLine(ansiToHtml(result));
     } else if (result && result.clear) {
       clearScreen();
-    } else if (result && result.raw) {
-      addLine('<span class="dim">' + escapeHtml(result.raw.replace(/\x1b\[\d+m/g, '')) + '</span>');
-      if (result.todos) showTable(result.todos);
     } else if (result && result.todos) {
       showTable(result.todos);
     }
@@ -109,7 +107,7 @@
   async function executeCommand(cmd) {
     const trimmed = cmd.trim();
     if (!trimmed) return;
-    addPromptAndCommand(trimmed);
+    addPrompt(trimmed);
     const parts = parseCommand(trimmed);
     const commandName = parts[0];
     const args = parts.slice(1);
@@ -140,12 +138,6 @@
     }
     if (current) args.push(current);
     return args;
-  }
-
-  function getCompletions(partial) {
-    const cmdNames = Object.keys(COMMANDS);
-    if (!partial.includes(' ')) return cmdNames.filter(c => c.startsWith(partial));
-    return [];
   }
 
   /* ── Suggestions dropdown ── */
@@ -184,7 +176,7 @@
     if (items.length > maxRows) {
       const el = document.createElement('div');
       el.className = 'suggestion-item';
-      el.innerHTML = `<span class="cmd-desc" style="text-align:center;color:#555;">${items.length} commands — type to filter</span>`;
+      el.innerHTML = `<span class="cmd-desc" style="text-align:center;color:#555;">${items.length} commands</span>`;
       suggestions.appendChild(el);
     }
 
@@ -203,7 +195,6 @@
     const item = suggestionItems[idx];
     if (!item) return;
     input.value = item.name + ' ';
-    input.selectionStart = input.selectionEnd = input.value.length;
     hideSuggestions();
     input.focus();
   }
@@ -227,24 +218,30 @@
   }
 
   input.addEventListener('input', updateSuggestions);
+  input.addEventListener('focus', updateSuggestions);
 
   input.addEventListener('keydown', async (e) => {
+    if (busy) { e.preventDefault(); return; }
     const isOpen = !suggestions.classList.contains('hidden');
     const cmd = input.value;
 
     /* ── Enter ── */
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (isOpen && suggestionIndex >= 0 && suggestionItems[suggestionIndex]) {
-        selectSuggestion(suggestionIndex);
+      if (isOpen) {
+        if (suggestionIndex >= 0 && suggestionItems[suggestionIndex]) {
+          selectSuggestion(suggestionIndex);
+        }
         return;
       }
       hideSuggestions();
       if (cmd.trim()) {
+        busy = true;
         history.push(cmd.trim());
         historyIndex = history.length;
         input.value = '';
         await executeCommand(cmd);
+        busy = false;
       }
     }
 
@@ -253,8 +250,9 @@
       e.preventDefault();
       if (isOpen) {
         const els = suggestions.querySelectorAll('.suggestion-item');
+        if (!els.length) return;
         const prev = suggestionIndex <= 0 ? els.length - 1 : suggestionIndex - 1;
-        if (prev >= 0) setActiveSuggestion(prev);
+        setActiveSuggestion(prev);
       } else {
         if (history.length) {
           if (historyIndex === history.length) commandCache = cmd;
@@ -268,8 +266,9 @@
       e.preventDefault();
       if (isOpen) {
         const els = suggestions.querySelectorAll('.suggestion-item');
+        if (!els.length) return;
         const next = suggestionIndex >= els.length - 1 ? 0 : suggestionIndex + 1;
-        if (next < els.length) setActiveSuggestion(next);
+        setActiveSuggestion(next);
       } else {
         if (historyIndex < history.length) {
           historyIndex++;
@@ -278,35 +277,31 @@
       }
     }
 
-    /* ── Tab ── */
+    /* ── Tab ── use same suggestion logic */
     else if (e.key === 'Tab') {
       e.preventDefault();
-      if (isOpen) {
-        if (suggestionIndex >= 0 && suggestionItems[suggestionIndex]) {
-          selectSuggestion(suggestionIndex);
-        }
+      if (isOpen && suggestionIndex >= 0 && suggestionItems[suggestionIndex]) {
+        selectSuggestion(suggestionIndex);
         return;
       }
-      const completions = getCompletions(cmd);
-      if (completions.length === 1) {
-        input.value = completions[0] + ' ';
-      } else if (completions.length > 1) {
-        addLine(`<span class="gray">${completions.join('  ')}</span>`);
+      if (!cmd.includes(' ')) {
+        const m = Object.keys(COMMANDS).filter(c => c.startsWith(cmd));
+        if (m.length === 1) input.value = m[0] + ' ';
       }
     }
 
-    /* ── Ctrl+L → clear ── */
+    /* ── Ctrl+L / Cmd+L → clear ── */
     else if (e.key === 'l' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       clearScreen();
     }
 
-    /* ── Escape → close suggestions ── */
+    /* ── Escape ── */
     else if (e.key === 'Escape') {
       if (isOpen) { e.preventDefault(); hideSuggestions(); }
     }
 
-    /* ── Backspace at "/" → hide if input becomes empty ── */
+    /* ── Backspace when empty or only "/" ── */
     else if (e.key === 'Backspace' && cmd.length <= 1) {
       hideSuggestions();
     }
