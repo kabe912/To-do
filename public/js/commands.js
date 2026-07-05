@@ -86,10 +86,6 @@ const COMMANDS = {
             cells.map((c, i) => i === 2 ? c.replace(/./g, '─') : c).join(' ') :
             cells.join(' ');
 
-          const colorPrefix = r._done ? '\x1b[90m' :
-            r._pri === 'high' ? '\x1b[91m' :
-            r._pri === 'low' ? '\x1b[90m' : '';
-
           return ` ${style}`;
         };
 

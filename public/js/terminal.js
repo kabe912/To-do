@@ -1,6 +1,10 @@
 (function () {
   const output = document.getElementById('output');
   const input = document.getElementById('command-input');
+  if (!output || !input) {
+    console.error('Terminal: Required DOM elements not found');
+    return;
+  }
   const history = [];
   let historyIndex = -1;
   let commandCache = '';
@@ -206,6 +210,10 @@
       input.focus();
     }
   });
+
+  window.closeOverlay = function () {
+    document.getElementById('overlay').classList.add('hidden');
+  };
 
   window.Terminal = {
     clear: clearScreen,

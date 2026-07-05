@@ -7,8 +7,8 @@
   <link rel="stylesheet" href="/css/terminal.css">
   <style>
     body { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
-    #share-terminal { width: 800px; max-width: 100%; }
-    #share-terminal #output { min-height: 200px; }
+    #terminal { width: 800px; max-width: 100%; }
+    #terminal #output { min-height: 200px; }
     .password-form { display: flex; gap: 10px; margin-top: 12px; }
     .password-form input {
       flex: 1;
@@ -38,7 +38,7 @@
   </style>
 </head>
 <body>
-  <div id="terminal" id="share-terminal">
+  <div id="terminal">
     <div id="titlebar">
       <div class="traffic-lights">
         <span class="dot close"></span>
@@ -51,7 +51,7 @@
     <div id="output">
       <div class="line loading">Loading shared todos...</div>
     </div>
-    <div id="input-line" class="hidden" id="password-line">
+    <div id="input-line" class="hidden">
       <span class="prompt">password:</span>
       <input type="password" id="password-input" spellcheck="false">
       <button id="unlock-btn" style="background:transparent;border:1px solid #00ff41;color:#00ff41;font-family:inherit;font-size:13px;padding:6px 12px;cursor:pointer;border-radius:4px;margin-left:8px;">Unlock</button>
