@@ -4,15 +4,16 @@
   "description": "macOS Terminal-style To-Do App",
   "main": "server.js",
   "scripts": {
-"start": "node server.js",
-"dev": "node --watch server.js"
+    "start": "node server.js",
+    "dev": "node --watch server.js"
   },
   "dependencies": {
-    "express": "^4.21.0",
-    "mysql2": "^3.11.0",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "uuid": "^10.0.0",
-    "bcryptjs": "^2.4.3"
+    "express": "^4.21.0",
+    "express-rate-limit": "^8.5.2",
+    "mysql2": "^3.11.0",
+    "uuid": "^10.0.0"
   }
 }

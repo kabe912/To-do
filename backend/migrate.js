@@ -22,8 +22,9 @@ async function migrate() {
   try {
     console.log('Connected. Running migration...');
 
-    await conn.query('ALTER TABLE todos ADD COLUMN IF NOT EXISTS parent_id INT DEFAULT NULL');
-    await conn.query('ALTER TABLE todos ADD COLUMN IF NOT EXISTS recurring VARCHAR(50) DEFAULT NULL');
+    const tryAlter = async (sql) => { try { await conn.query(sql); } catch(e) { if (!e.message.includes('Duplicate column')) console.error('  ALTER error:', e.message); } };
+    await tryAlter('ALTER TABLE todos ADD COLUMN parent_id INT DEFAULT NULL');
+    await tryAlter('ALTER TABLE todos ADD COLUMN recurring VARCHAR(50) DEFAULT NULL');
     console.log('  Added parent_id, recurring to todos');
 
     await conn.query(`

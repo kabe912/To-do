@@ -14,7 +14,7 @@ router.post('/', async (req, res, next) => {
       todoIds = todos.map(t => t.id);
     }
 
-    const token = uuidv4().replace(/-/g, '').substring(0, 12);
+    const token = uuidv4().replace(/-/g, '');
     const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
     let expiresAt = null;
     if (expires_in_days) {
@@ -47,8 +47,7 @@ router.get('/:token', async (req, res, next) => {
       return res.status(410).json({ error: 'Share link has expired' });
     }
 
-    let todoIds = JSON.parse(link.todo_ids);
-    if (typeof todoIds === 'string') todoIds = JSON.parse(todoIds);
+    const todoIds = JSON.parse(link.todo_ids);
 
     const placeholders = todoIds.map(() => '?').join(',');
     const [todos] = await pool.query(
@@ -80,8 +79,7 @@ router.post('/:token/verify', async (req, res, next) => {
     const valid = await bcrypt.compare(password, link.password);
     if (!valid) return res.status(403).json({ error: 'Invalid password' });
 
-    let todoIds = JSON.parse(link.todo_ids);
-    if (typeof todoIds === 'string') todoIds = JSON.parse(todoIds);
+    const todoIds = JSON.parse(link.todo_ids);
 
     const placeholders = todoIds.map(() => '?').join(',');
     const [todos] = await pool.query(

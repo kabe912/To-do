@@ -101,6 +101,21 @@ function addRowNumbers(todos) {
   return todos.map((t, i) => { t._row = i + 1; return t; });
 }
 
+async function execOnIds(args, updates, formatter) {
+  const resolved = await resolveTodos(args);
+  const results = [];
+  for (const r of resolved) {
+    if (r.error) { results.push(` ${r.error}`); continue; }
+    try {
+      await API.updateTodo(r.todo.id, updates);
+      invalidateCache();
+      results.push(formatter(r.todo));
+      pushUndo({ type: 'update', todo: r.todo, updates });
+    } catch (err) { results.push(` #${r.todo.id}: ${err.message}`); }
+  }
+  return results.join('\n');
+}
+
 /* ── Parse --search/--all arguments for batch commands ── */
 async function resolveBatchTodos(args, baseStatus) {
   if (!args.length) return { error: 'No args' };
@@ -126,7 +141,29 @@ async function resolveBatchTodos(args, baseStatus) {
   else if (getFromStatus !== 'all') todos = todos.filter(t => t.status === getFromStatus);
   else todos = todos.filter(t => ACTIVE_STATUSES.includes(t.status));
   if (searchTerm) todos = todos.filter(t => t.title.toLowerCase().includes(searchTerm.toLowerCase()));
-  return { todos, selectors };
+
+  if (selectors.length) {
+    todos.forEach((t, i) => { t._row = i + 1; });
+    const resolved = [];
+    for (const sel of selectors) {
+      const cleaned = sel.replace(/^#+/, '').trim();
+      const num = parseInt(cleaned);
+      if (!isNaN(num) && String(num) === cleaned) {
+        const byRow = todos.find(t => t._row === num);
+        if (byRow) { resolved.push(byRow); continue; }
+        const byId = todos.find(t => t.id === num);
+        if (byId) { resolved.push(byId); continue; }
+      } else {
+        const exact = todos.filter(t => t.title === cleaned);
+        if (exact.length === 1) { resolved.push(exact[0]); continue; }
+        const matches = todos.filter(t => t.title.includes(cleaned));
+        if (matches.length === 1) { resolved.push(matches[0]); continue; }
+      }
+    }
+    return { todos: resolved };
+  }
+
+  return { todos };
 }
 
 const COMMANDS = {
@@ -194,7 +231,7 @@ const COMMANDS = {
     async execute(args) {
       if (!args.length) return ' Usage: add "Title" [-s pending|in_progress] [-p high|medium|low] [-d YYYY-MM-DD] [-c CATEGORY] [--every daily|weekly|monthly|yearly] [--parent ROW]';
       let title = '';
-      const todo = { status: 'pending', due_date: todayStr() };
+      const todo = { status: 'pending', due_date: null };
       let i = 0, parentRow = null;
       if (args[i] && !args[i].startsWith('-')) { title = args[i++]; }
       while (i < args.length) {

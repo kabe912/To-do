@@ -3,6 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const rateLimit = require('express-rate-limit');
 const pool = require('./backend/config/db');
 const errorHandler = require('./backend/middleware/errorHandler');
 const todosRouter = require('./backend/routes/todos');
@@ -11,8 +12,15 @@ const sharesRouter = require('./backend/routes/shares');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+const allowedOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : undefined;
+app.use(cors(allowedOrigins ? { origin: allowedOrigins } : {}));
 app.use(express.json());
+
+const globalLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false });
+app.use('/api', globalLimiter);
+
+const shareVerifyLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many attempts, try again later' } });
+app.use('/api/share', shareVerifyLimiter);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -38,6 +46,7 @@ async function migrate() {
     await conn.query(`CREATE TABLE IF NOT EXISTS tags (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE)`);
     await conn.query(`CREATE TABLE IF NOT EXISTS todo_tags (todo_id INT NOT NULL, tag_id INT NOT NULL, PRIMARY KEY (todo_id, tag_id), FOREIGN KEY (todo_id) REFERENCES todos(id) ON DELETE CASCADE, FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE)`);
     await conn.query(`CREATE TABLE IF NOT EXISTS time_logs (id INT AUTO_INCREMENT PRIMARY KEY, todo_id INT NOT NULL, start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, end_time TIMESTAMP NULL DEFAULT NULL, duration INT DEFAULT NULL, FOREIGN KEY (todo_id) REFERENCES todos(id) ON DELETE CASCADE)`);
+    await conn.query(`CREATE TABLE IF NOT EXISTS shared_links (id INT AUTO_INCREMENT PRIMARY KEY, token VARCHAR(64) UNIQUE NOT NULL, todo_ids TEXT NOT NULL, password VARCHAR(255) DEFAULT NULL, expires_at TIMESTAMP NULL DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
     console.log('Migration: tables ready');
     conn.release();
   } catch (err) {

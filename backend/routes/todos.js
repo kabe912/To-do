@@ -117,6 +117,15 @@ router.put('/:id', async (req, res, next) => {
     const { id } = req.params;
     const { title, description, category, priority, status, due_date, completed, parent_id, recurring } = req.body;
 
+    const validStatuses = ['pending', 'in_progress', 'completed', 'learned'];
+    const validPriorities = ['low', 'medium', 'high'];
+    if (status !== undefined && !validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be: pending, in_progress, completed, or learned' });
+    }
+    if (priority !== undefined && !validPriorities.includes(priority)) {
+      return res.status(400).json({ error: 'Invalid priority. Must be: low, medium, or high' });
+    }
+
     const fields = [];
     const params = [];
 

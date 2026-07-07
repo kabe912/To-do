@@ -1,8 +1,7 @@
 function errorHandler(err, req, res, next) {
   console.error(err.stack);
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal Server Error',
-  });
+  const message = process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message || 'Internal Server Error';
+  res.status(err.status || 500).json({ error: message });
 }
 
 module.exports = errorHandler;

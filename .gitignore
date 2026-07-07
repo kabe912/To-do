@@ -1,5 +1,6 @@
 node_modules/
 .env
 backend/.env
+backend/config/ca.pem
 *.log
 .DS_Store

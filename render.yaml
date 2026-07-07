@@ -6,16 +6,16 @@ services:
     startCommand: node server.js
     envVars:
       - key: DB_HOST
-        value: mysqldbt-dbt1.l.aivencloud.com
+        sync: false
       - key: DB_PORT
-        value: "13268"
+        sync: false
       - key: DB_USER
-        value: avnadmin
+        sync: false
       - key: DB_PASSWORD
-        value: minhtien303
+        sync: false
       - key: DB_NAME
-        value: web_terminal
+        sync: false
       - key: SSL_CA
-        value: backend/config/ca.pem
+        sync: false
       - key: NODE_VERSION
         value: "20"
