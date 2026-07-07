@@ -1,5 +1,24 @@
 const API = {
   async request(method, path, body) {
+    const isMutation = method !== 'GET';
+    const isOffline = typeof Sync !== 'undefined' && !Sync.isConnected();
+
+    if (isMutation && isOffline && typeof OfflineQueue !== 'undefined') {
+      const sid = typeof _sessionId !== 'undefined' ? _sessionId : '';
+      let fullPath = path;
+      if (sid) {
+        const sep = path.includes('?') ? '&' : '?';
+        fullPath += `${sep}_session_id=${sid}`;
+      }
+      const lastKnown = body && body.id ? (() => {
+        const cache = typeof _todoCache !== 'undefined' ? _todoCache : null;
+        const t = cache ? cache.find(t => t.id === body.id) : null;
+        return t ? t.updated_at : null;
+      })() : null;
+      OfflineQueue.enqueue(method, fullPath, body, lastKnown);
+      throw new Error('Offline — mutation queued for sync');
+    }
+
     const opts = {
       method,
       headers: { 'Content-Type': 'application/json' },

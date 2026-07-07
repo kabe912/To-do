@@ -879,4 +879,39 @@ const COMMANDS = {
       } catch (err) { return ` Error: ${err.message}`; }
     }
   },
+
+  conflicts: {
+    desc: 'Show pending offline sync conflicts',
+    usage: 'conflicts',
+    execute() {
+      return PendingConflicts.list();
+    }
+  },
+
+  resolve: {
+    desc: 'Resolve a sync conflict (keep mine or server)',
+    usage: 'resolve <num> mine|server',
+    async execute(args) {
+      if (args.length < 2) return ' Usage: resolve <num> mine|server';
+      const num = parseInt(args[0]);
+      const choice = args[1].toLowerCase();
+      if (isNaN(num)) return ' Conflict number must be a number.';
+      if (choice !== 'mine' && choice !== 'server') return ' Choice must be "mine" or "server".';
+      return PendingConflicts.resolve(num, choice);
+    }
+  },
+
+  sync: {
+    desc: 'Force replay offline queue / check sync status',
+    usage: 'sync',
+    async execute() {
+      if (typeof Sync === 'undefined') return ' Sync not available.';
+      if (Sync.isConnected()) {
+        await Sync.replayQueue();
+        const pending = OfflineQueue.getPending();
+        return pending.length ? ` ${pending.length} mutation(s) still pending.` : ' Sync complete — all mutations applied.';
+      }
+      return ' Offline — mutations will be queued until reconnect.';
+    }
+  },
 };

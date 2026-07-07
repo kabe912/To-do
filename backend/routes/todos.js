@@ -118,10 +118,18 @@ router.get('/:id', async (req, res, next) => {
 router.put('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { title, description, category, priority, status, due_date, completed, parent_id, recurring, _session_id } = req.body;
+    const { title, description, category, priority, status, due_date, completed, parent_id, recurring, _session_id, _force, _clientUpdated } = req.body;
 
     const [beforeRows] = await pool.query('SELECT * FROM todos WHERE id = ?', [id]);
     const beforeState = beforeRows[0] || null;
+
+    if (!_force && _clientUpdated && beforeState && beforeState.updated_at) {
+      const clientTime = new Date(_clientUpdated).getTime();
+      const serverTime = new Date(beforeState.updated_at).getTime();
+      if (serverTime > clientTime) {
+        return res.status(409).json({ error: 'Conflict: server version is newer', server: beforeState });
+      }
+    }
 
     const validStatuses = ['pending', 'in_progress', 'completed', 'learned'];
     const validPriorities = ['low', 'medium', 'high'];
