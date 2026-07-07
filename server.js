@@ -30,7 +30,7 @@ app.use('/api', globalLimiter);
 const shareVerifyLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many attempts, try again later' } });
 app.use('/api/share', shareVerifyLimiter);
 
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h', etag: true }));
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/api/todos', todosRouter);
 app.use('/api/share', sharesRouter);

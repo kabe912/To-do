@@ -100,7 +100,10 @@
     output.scrollTop = output.scrollHeight;
   }
 
-  function execCommand(cmd) {
+  function execCommand(cmd, replace = false) {
+    if (replace) {
+      output.innerHTML = '<div class="line"><span class="dim">-- planning view --</span></div>';
+    }
     input.value = cmd;
     submitInput();
   }
@@ -128,7 +131,7 @@
     container.appendChild(nav);
 
     nav.querySelectorAll('[data-cmd]').forEach(btn => {
-      btn.addEventListener('click', () => execCommand(btn.dataset.cmd));
+      btn.addEventListener('click', () => execCommand(btn.dataset.cmd, true));
     });
 
     if (!todos || !todos.length) {
@@ -179,7 +182,7 @@
       </span>`;
     container.appendChild(nav);
     nav.querySelectorAll('[data-cmd]').forEach(btn => {
-      btn.addEventListener('click', () => execCommand(btn.dataset.cmd));
+      btn.addEventListener('click', () => execCommand(btn.dataset.cmd, true));
     });
 
     const grid = document.createElement('div');
@@ -250,7 +253,7 @@
       </span>`;
     container.appendChild(nav);
     nav.querySelectorAll('[data-cmd]').forEach(btn => {
-      btn.addEventListener('click', () => execCommand(btn.dataset.cmd));
+      btn.addEventListener('click', () => execCommand(btn.dataset.cmd, true));
     });
 
     const grid = document.createElement('div');
@@ -302,7 +305,7 @@
       }
 
       cell.innerHTML = `<div class="mg-num">${day}</div>${countHtml}<div class="mg-tasks">${tasksHtml}</div>`;
-      cell.addEventListener('click', () => execCommand('day ' + ds));
+      cell.addEventListener('click', () => execCommand('day ' + ds, true));
       grid.appendChild(cell);
     }
 
@@ -507,6 +510,10 @@
         if (suggestionIndex >= 0 && suggestionItems[suggestionIndex]) {
           const selected = suggestionItems[suggestionIndex];
           if (input.value.trim() === selected.name) {
+            hideSuggestions();
+            await submitInput();
+          } else if (input.value.trim().startsWith('/')) {
+            input.value = selected.name + ' ';
             hideSuggestions();
             await submitInput();
           } else {
