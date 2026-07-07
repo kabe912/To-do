@@ -245,7 +245,15 @@ const COMMANDS = {
           case '-s': case '--status': todo.status = args[++i]; break;
           case '-p': case '--priority': todo.priority = args[++i]; break;
           case '-d': case '--due': case '--due-date': todo.due_date = args[++i]; break;
-          case '-t': case '--time': todo.due_time = args[++i]; break;
+          case '-t': case '--time': {
+            i++;
+            todo.due_time = args[i];
+            if (i + 2 < args.length && args[i+1] === '-' && !args[i+2].startsWith('-')) {
+              todo.due_time += ' ' + args[i+1] + ' ' + args[i+2];
+              i += 2;
+            }
+            break;
+          }
           case '-c': case '--category': todo.category = args[++i]; break;
           case '--desc': case '--description': todo.description = args[++i]; break;
           case '--every': todo.recurring = args[++i]; if (!RECURRING_TYPES.includes(todo.recurring)) return ' Recurring must be: daily, weekly, monthly, yearly'; break;
@@ -398,37 +406,81 @@ const COMMANDS = {
   },
 
   edit: {
-    desc: 'Edit a todo',
-    usage: 'edit <row|id|"title"> "new title" [-s STATUS] [-p PRIORITY] [-d DATE] [-t HH:MM] [-c CATEGORY] [--desc "text"]',
+    desc: 'Edit one or more todos',
+    usage: 'edit <row|id|"title"> [more...] [-s STATUS] [-p PRIORITY] [-d DATE] [-t TIME] [-c CATEGORY] [--desc "text"] ["new title"]',
     async execute(args) {
-      if (args.length < 2) return ' Usage: edit <row | id | "title"> ...';
-      const r = await resolveSingleTodo(args[0]);
-      if (r.error) return ` ${r.error}`;
-      const todoId = r.todo.id;
-      const prev = r.todo;
+      if (args.length < 2) return ' Usage: edit <row | id | "title"> [more...] [-s STATUS] [-p PRIORITY] [-d DATE] [-t TIME] [-c CATEGORY] [--desc "text"] ["new title"]';
+
+      // Separate selectors from named flags
+      const selectors = [];
       const updates = {};
-      let title = '';
-      let i = 1;
-      if (!args[i].startsWith('-')) { title = args[i++]; }
+      let title = null;
+      let i = 0;
       while (i < args.length) {
-        switch (args[i]) {
-          case '-s': case '--status': updates.status = args[++i]; break;
-          case '-p': case '--priority': updates.priority = args[++i]; break;
-          case '-d': case '--due': case '--due-date': updates.due_date = args[++i]; break;
-          case '-t': case '--time': updates.due_time = args[++i]; break;
-          case '-c': case '--category': updates.category = args[++i]; break;
-          case '--desc': case '--description': updates.description = args[++i]; break;
-          default: title = (title ? title + ' ' : '') + args[i]; i++; continue;
+        if (args[i].startsWith('-')) {
+          switch (args[i]) {
+            case '-s': case '--status': updates.status = args[++i]; break;
+            case '-p': case '--priority': updates.priority = args[++i]; break;
+            case '-d': case '--due': case '--due-date': updates.due_date = args[++i]; break;
+            case '-t': case '--time': {
+              i++;
+              updates.due_time = args[i];
+              if (i + 2 < args.length && args[i+1] === '-' && !args[i+2].startsWith('-')) {
+                updates.due_time += ' ' + args[i+1] + ' ' + args[i+2];
+                i += 2;
+              }
+              break;
+            }
+            case '-c': case '--category': updates.category = args[++i]; break;
+            case '--desc': case '--description': updates.description = args[++i]; break;
+            default: selectors.push(args[i]); break;
+          }
+          i++;
+        } else {
+          selectors.push(args[i]);
+          i++;
         }
-        i++;
       }
+
+      if (!selectors.length) return ' No selectors provided.';
+
+      // Resolve all selectors
+      const resolved = await resolveTodos(selectors, { all: true });
+      const todos = [];
+      const errors = [];
+      for (const r of resolved) {
+        if (r.error) errors.push(r.error);
+        else todos.push(r.todo);
+      }
+
+      if (!todos.length) {
+        return errors.length ? ' ' + errors.join('\n ') : ' No matching todos.';
+      }
+
+      // If single todo and no named updates, treat 2nd selector as title
+      if (todos.length === 1 && !Object.keys(updates).length && selectors.length >= 2) {
+        title = selectors.slice(1).join(' ');
+      }
+
       if (title) updates.title = title;
-      try {
-        const updated = await API.updateTodo(todoId, updates);
-        invalidateCache();
-        pushUndo({ type: 'edit', id: todoId, prev });
-        return ` Updated #${updated.id}: "${updated.title}"`;
-      } catch (err) { return ` Error: ${err.message}`; }
+
+      if (!Object.keys(updates).length) {
+        return ' No updates specified.';
+      }
+
+      const results = [];
+      for (const t of todos) {
+        try {
+          const prev = { ...t };
+          const updated = await API.updateTodo(t.id, updates);
+          invalidateCache();
+          pushUndo({ type: 'edit', id: t.id, prev });
+          results.push(` Updated #${updated.id}: "${updated.title}"`);
+        } catch (err) {
+          results.push(` #${t.id}: ${err.message}`);
+        }
+      }
+      return results.join('\n');
     }
   },
 
