@@ -78,10 +78,10 @@ router.get('/tags/list', async (req, res, next) => {
 router.patch('/reorder', async (req, res, next) => {
   try {
     const { ids } = req.body;
-    if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids array required' });
-    for (let i = 0; i < ids.length; i++) {
-      await pool.query('UPDATE todos SET position = ? WHERE id = ?', [i, ids[i]]);
-    }
+    if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
+    const cases = ids.map((id, i) => `WHEN id = ${parseInt(id)} THEN ${i}`).join(' ');
+    const idList = ids.map(id => parseInt(id)).join(',');
+    await pool.query(`UPDATE todos SET position = CASE ${cases} END WHERE id IN (${idList})`);
     res.json({ message: 'Reordered' });
   } catch (err) { next(err); }
 });

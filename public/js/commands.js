@@ -227,9 +227,9 @@ const COMMANDS = {
 
   add: {
     desc: 'Add a new todo',
-    usage: 'add "Title" [-s STATUS] [-p PRIORITY] [-d DATE] [-c CATEGORY] [--desc "text"] [--every daily|weekly|monthly|yearly] [--parent ROW]',
+    usage: 'add "Title" [tmrw|today|nw] [high|med|low] [-c CAT] [--every daily|weekly]',
     async execute(args) {
-      if (!args.length) return ' Usage: add "Title" [-s pending|in_progress] [-p high|medium|low] [-d YYYY-MM-DD] [-c CATEGORY] [--every daily|weekly|monthly|yearly] [--parent ROW]';
+      if (!args.length) return ' Usage: add "Title" [tmrw|today|nw] [high|med|low] [-c CAT] [--every daily|weekly|monthly|yearly]';
       let title = '';
       const todo = { status: 'pending', due_date: null };
       let i = 0, parentRow = null;
@@ -243,7 +243,14 @@ const COMMANDS = {
           case '--desc': case '--description': todo.description = args[++i]; break;
           case '--every': todo.recurring = args[++i]; if (!RECURRING_TYPES.includes(todo.recurring)) return ' Recurring must be: daily, weekly, monthly, yearly'; break;
           case '--parent': parentRow = args[++i]; break;
-          default: title = (title ? title + ' ' : '') + args[i]; i++; continue;
+          default:
+            const a = args[i];
+            if (!todo.due_date && (a === 'today')) { todo.due_date = todayStr(); }
+            else if (!todo.due_date && (a === 'tmrw' || a === 'tomorrow')) { todo.due_date = daysFromNow(1); }
+            else if (!todo.due_date && (a === 'nw' || a === 'nextweek')) { todo.due_date = daysFromNow(7); }
+            else if (!todo.priority && (a === 'high' || a === 'med' || a === 'medium' || a === 'low')) { todo.priority = a === 'med' ? 'medium' : a; }
+            else { title = (title ? title + ' ' : '') + a; }
+            i++; continue;
         }
         i++;
       }
@@ -265,13 +272,18 @@ const COMMANDS = {
 
   done: {
     desc: 'Mark todos as completed (handles recurring)',
-    usage: 'done <row|id|"title"> [more...] [--search TERM] [--all]',
+    usage: 'done <row|id|"title"> [more...] [--search TERM] [--all] [--dry-run]',
     async execute(args) {
-      if (!args.length) return ' Usage: done <row | id | "title"> [--search TERM] [--all]';
+      const dryRun = args.includes('--dry-run');
+      if (dryRun) args = args.filter(a => a !== '--dry-run');
+      if (!args.length) return ' Usage: done <row | id | "title"> [--search TERM] [--all] [--dry-run]';
       const resolved = await resolveBatchTodos(args);
       if (resolved.error) return COMMANDS.execOnIds(args, { status: 'completed', completed: true }, t => ` ✓ #${t.id} "${t.title}" → done`);
       const todos = resolved.todos;
       if (!todos.length) return ' No matching todos.';
+      if (dryRun) {
+        return ` Would complete ${todos.length} todo(s):\n` + todos.map(t => `  #${t._row || t.id} "${t.title}" [${t.status}]`).join('\n');
+      }
       const results = [];
       for (const t of todos) {
         try {
@@ -717,6 +729,73 @@ const COMMANDS = {
         }
         invalidateCache();
         return ` Imported ${count} todo(s).`;
+      } catch (err) { return ` Error: ${err.message}`; }
+    }
+  },
+
+  cats: {
+    desc: 'Manage categories',
+    usage: 'cats [rename OLD NEW] [delete CATEGORY]',
+    async execute(args) {
+      try {
+        const todos = await getTodos();
+        const catMap = {};
+        todos.forEach(t => {
+          if (t.category) {
+            if (!catMap[t.category]) catMap[t.category] = { count: 0, done: 0 };
+            catMap[t.category].count++;
+            if (t.status === 'completed' || t.status === 'learned') catMap[t.category].done++;
+          }
+        });
+        if (!args.length) {
+          const cats = Object.entries(catMap).sort((a, b) => b[1].count - a[1].count);
+          if (!cats.length) return ' No categories found.';
+          const lines = [' Categories:\n'];
+          cats.forEach(([name, info]) => {
+            const pct = info.count ? (info.done / info.count * 100).toFixed(0) : 0;
+            lines.push(`  ${name.padEnd(16)} ${String(info.count).padStart(3)} todos  ${String(info.done).padStart(3)} done  (${pct}%)`);
+          });
+          return lines.join('\n');
+        }
+        if (args[0] === 'rename' && args.length >= 3) {
+          const oldName = args[1], newName = args[2];
+          if (!catMap[oldName]) return ` Category "${oldName}" not found.`;
+          const todosToUpdate = todos.filter(t => t.category === oldName);
+          for (const t of todosToUpdate) {
+            await API.updateTodo(t.id, { category: newName });
+          }
+          invalidateCache();
+          return ` Renamed "${oldName}" → "${newName}" (${todosToUpdate.length} todos updated).`;
+        }
+        if (args[0] === 'delete' && args.length >= 2) {
+          const catName = args[1];
+          if (!catMap[catName]) return ` Category "${catName}" not found.`;
+          const todosToUpdate = todos.filter(t => t.category === catName);
+          for (const t of todosToUpdate) {
+            await API.updateTodo(t.id, { category: null });
+          }
+          invalidateCache();
+          return ` Deleted category "${catName}" (${todosToUpdate.length} todos un-categorized).`;
+        }
+        return ' Usage: cats [rename OLD NEW] [delete CATEGORY]';
+      } catch (err) { return ` Error: ${err.message}`; }
+    }
+  },
+
+  focus: {
+    desc: 'Start focus timer on a todo',
+    usage: 'focus <row|id|"title"> [minutes]',
+    async execute(args) {
+      if (!args.length) return ' Usage: focus <row> [minutes]';
+      const minutes = parseInt(args[args.length - 1]) && !args[args.length - 1].startsWith('#') ? parseInt(args.pop()) : 25;
+      const r = await resolveSingleTodo(args[0]);
+      if (r.error) return ` ${r.error}`;
+      try {
+        await API.timeStart(r.todo.id);
+        invalidateCache();
+        const end = new Date(Date.now() + minutes * 60 * 1000);
+        const timeStr = end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return [`` + ` ⏱ Focus started on #${r.todo.id} "${r.todo.title}" for ${minutes}m`, `   Stop at ${timeStr} with: track #${r.todo.id} stop`].join('\n');
       } catch (err) { return ` Error: ${err.message}`; }
     }
   },

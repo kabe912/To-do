@@ -61,6 +61,7 @@
     const statusLabels = { pending: 'pending', in_progress: 'learn', completed: 'done', learned: 'known' };
     const statusColors = { pending: 'status-pending', in_progress: 'status-progress', completed: 'status-done', learned: 'status-learned' };
 
+    const frag = document.createDocumentFragment();
     const table = document.createElement('div');
     table.className = 'todo-table';
 
@@ -94,7 +95,8 @@
       table.appendChild(row);
     });
 
-    output.appendChild(table);
+    frag.appendChild(table);
+    output.appendChild(frag);
     output.scrollTop = output.scrollHeight;
   }
 
@@ -347,9 +349,30 @@
       clearScreen();
     }
 
+    /* ── Ctrl+D / Cmd+D → done (first arg = last active todo) ── */
+    else if (e.key === 'd' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      if (!input.value.trim()) { input.value = 'done #1'; }
+      else { input.value = 'done ' + input.value.trim(); }
+    }
+
+    /* ── Ctrl+N / Cmd+N → new todo shorthand ── */
+    else if (e.key === 'n' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      input.value = 'add ';
+    }
+
+    /* ── Ctrl+Z / Cmd+Z → undo ── */
+    else if (e.key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+      e.preventDefault();
+      input.value = 'undo';
+      submitInput();
+    }
+
     /* ── Escape ── */
     else if (e.key === 'Escape') {
       if (isOpen) { e.preventDefault(); hideSuggestions(); }
+      else if (input.value) { input.value = ''; }
     }
   });
 

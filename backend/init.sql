@@ -15,7 +15,13 @@ CREATE TABLE IF NOT EXISTS todos (
   recurring   VARCHAR(50) DEFAULT NULL,
   created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (parent_id) REFERENCES todos(id) ON DELETE SET NULL
+  FOREIGN KEY (parent_id) REFERENCES todos(id) ON DELETE SET NULL,
+  INDEX idx_todos_category (category),
+  INDEX idx_todos_priority (priority),
+  INDEX idx_todos_status (status),
+  INDEX idx_todos_completed (completed),
+  INDEX idx_todos_due_date (due_date),
+  INDEX idx_todos_parent_id (parent_id)
 );
 
 CREATE TABLE IF NOT EXISTS tags (
@@ -37,7 +43,8 @@ CREATE TABLE IF NOT EXISTS time_logs (
   start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   end_time   TIMESTAMP NULL DEFAULT NULL,
   duration   INT DEFAULT NULL,
-  FOREIGN KEY (todo_id) REFERENCES todos(id) ON DELETE CASCADE
+  FOREIGN KEY (todo_id) REFERENCES todos(id) ON DELETE CASCADE,
+  INDEX idx_time_logs_todo_end (todo_id, end_time)
 );
 
 CREATE TABLE IF NOT EXISTS shared_links (
