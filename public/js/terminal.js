@@ -85,7 +85,7 @@
       const priClass = t.priority === 'high' ? 'priority-high' : t.priority === 'low' ? 'priority-low' : 'priority-medium';
       const sc = statusColors[t.status] || 'status-pending';
       const sl = statusLabels[t.status] || t.status;
-      const timeVal = t.due_time ? t.due_time.slice(0, 5) : '';
+      const timeVal = t.due_time || '';
       row.innerHTML = `
         <div class="todo-cell id">${t._row || t.id}</div>
         <div class="todo-cell title${t.status === 'completed' || t.status === 'learned' ? ' done' : ''}"><span class="title-text">${escapeHtml(t.title)}</span></div>
@@ -149,7 +149,7 @@
         const isDone = t.status === 'completed' || t.status === 'learned';
         const priClass = t.priority === 'high' ? 'pri-high' : t.priority === 'low' ? 'pri-low' : 'pri-medium';
         const statusLabels = { pending: 'pending', in_progress: 'learn', completed: 'done', learned: 'known' };
-        const timeVal = t.due_time ? t.due_time.slice(0, 5) : '';
+        const timeVal = t.due_time || '';
         row.innerHTML = `
           <span class="dt-check ${isDone ? 'done' : ''}">${isDone ? '✓' : '○'}</span>
           <span class="dt-title ${isDone ? 'done-text' : ''}">${escapeHtml(t.title)}</span>

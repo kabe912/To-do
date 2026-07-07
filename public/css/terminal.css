@@ -156,7 +156,7 @@ html, body {
 .todo-cell.done .title-text { text-decoration: line-through; color: #666; }
 .todo-cell.priority { width: 60px; text-align: center; }
 .todo-cell.due { width: 100px; color: #888; font-size: 12px; }
-.todo-cell.time { width: 55px; color: #888; font-size: 12px; text-align: center; }
+.todo-cell.time { width: 95px; color: #888; font-size: 12px; text-align: center; }
 .todo-cell.category { width: 80px; }
 .todo-cell.tags { width: 120px; color: #888; font-size: 11px; }
 
@@ -401,7 +401,7 @@ html, body {
 .day-task .dt-time {
   color: #888;
   font-size: 11px;
-  width: 45px;
+  min-width: 70px;
   text-align: center;
 }
 .day-task .dt-pri {
