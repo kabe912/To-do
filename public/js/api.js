@@ -36,6 +36,11 @@ const API = {
   timeStop(todoId) { return this.request('PUT', `/todos/${todoId}/time/stop`); },
   timeLog(todoId) { return this.request('GET', `/todos/${todoId}/time`); },
 
+  addDependency(todoId, dependsOnId) { return this.request('POST', `/todos/${todoId}/dependencies`, { depends_on_id: dependsOnId }); },
+  removeDependency(todoId, depId) { return this.request('DELETE', `/todos/${todoId}/dependencies/${depId}`); },
+  listDependencies(todoId) { return this.request('GET', `/todos/${todoId}/dependencies`); },
+  checkBlocked(todoId) { return this.request('GET', `/todos/${todoId}/blocked-by`); },
+
   createShareLink(data) { return this.request('POST', '/share', data); },
   getShareLink(token) { return this.request('GET', `/share/${token}`); },
   verifySharePassword(token, password) { return this.request('POST', `/share/${token}/verify`, { password }); },

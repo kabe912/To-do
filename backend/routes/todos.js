@@ -181,6 +181,14 @@ router.delete('/:id', async (req, res, next) => {
 router.patch('/:id/toggle', async (req, res, next) => {
   try {
     const { id } = req.params;
+    const [current] = await pool.query('SELECT completed FROM todos WHERE id = ?', [id]);
+    if (!current.length) return res.status(404).json({ error: 'Todo not found' });
+    if (!current[0].completed) {
+      const blocking = await getBlockingDeps(id);
+      if (blocking.length) {
+        return res.status(409).json({ error: `Blocked by: ${blocking.map(d => `#${d.id} "${d.title}"`).join(', ')}` });
+      }
+    }
     await pool.query(`
       UPDATE todos
       SET completed = NOT completed,
@@ -188,7 +196,6 @@ router.patch('/:id/toggle', async (req, res, next) => {
       WHERE id = ?
     `, [id]);
     const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [id]);
-    if (!todo[0]) return res.status(404).json({ error: 'Todo not found' });
     req.app.get('io').emit('todo:statusChanged', todo[0]);
     res.json(todo[0]);
   } catch (err) { next(err); }
@@ -199,6 +206,13 @@ router.patch('/:id/complete', async (req, res, next) => {
     const { id } = req.params;
     const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [id]);
     if (!todo[0]) return res.status(404).json({ error: 'Todo not found' });
+
+    if (!todo[0].completed) {
+      const blocking = await getBlockingDeps(id);
+      if (blocking.length) {
+        return res.status(409).json({ error: `Blocked by: ${blocking.map(d => `#${d.id} "${d.title}"`).join(', ')}` });
+      }
+    }
 
     await pool.query('UPDATE todos SET status = "completed", completed = 1 WHERE id = ?', [id]);
 
@@ -283,6 +297,83 @@ router.get('/:id/time', async (req, res, next) => {
     const [logs] = await pool.query('SELECT * FROM time_logs WHERE todo_id = ? ORDER BY start_time DESC', [req.params.id]);
     const [total] = await pool.query('SELECT COALESCE(SUM(duration), 0) AS total FROM time_logs WHERE todo_id = ?', [req.params.id]);
     res.json({ logs, total_seconds: total[0].total });
+  } catch (err) { next(err); }
+});
+
+/* ── Dependencies ── */
+
+async function hasCycle(todoId, dependsOnId) {
+  const visited = new Set();
+  const queue = [parseInt(dependsOnId)];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current === parseInt(todoId)) return true;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    const [deps] = await pool.query('SELECT depends_on_id FROM todo_dependencies WHERE todo_id = ?', [current]);
+    for (const dep of deps) queue.push(dep.depends_on_id);
+  }
+  return false;
+}
+
+async function getBlockingDeps(todoId) {
+  const [deps] = await pool.query(
+    `SELECT t.id, t.title FROM todo_dependencies td JOIN todos t ON t.id = td.depends_on_id WHERE td.todo_id = ? AND t.completed = 0`,
+    [todoId]
+  );
+  return deps;
+}
+
+router.post('/:id/dependencies', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { depends_on_id } = req.body;
+    if (!depends_on_id) return res.status(400).json({ error: 'depends_on_id required' });
+    if (parseInt(id) === parseInt(depends_on_id)) return res.status(400).json({ error: 'A todo cannot depend on itself' });
+
+    const [existing] = await pool.query('SELECT id FROM todos WHERE id = ?', [id]);
+    if (!existing.length) return res.status(404).json({ error: 'Todo not found' });
+    const [depExists] = await pool.query('SELECT id FROM todos WHERE id = ?', [depends_on_id]);
+    if (!depExists.length) return res.status(404).json({ error: 'Dependency todo not found' });
+
+    const [dupe] = await pool.query('SELECT 1 FROM todo_dependencies WHERE todo_id = ? AND depends_on_id = ?', [id, depends_on_id]);
+    if (dupe.length) return res.status(409).json({ error: 'Dependency already exists' });
+
+    if (await hasCycle(id, depends_on_id)) {
+      return res.status(400).json({ error: 'Adding this dependency would create a circular reference' });
+    }
+
+    await pool.query('INSERT INTO todo_dependencies (todo_id, depends_on_id) VALUES (?, ?)', [id, depends_on_id]);
+    const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [id]);
+    req.app.get('io').emit('todo:updated', todo[0]);
+    res.status(201).json({ message: 'Dependency added' });
+  } catch (err) { next(err); }
+});
+
+router.delete('/:id/dependencies/:depId', async (req, res, next) => {
+  try {
+    const { id, depId } = req.params;
+    await pool.query('DELETE FROM todo_dependencies WHERE todo_id = ? AND depends_on_id = ?', [id, depId]);
+    const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [id]);
+    if (todo[0]) req.app.get('io').emit('todo:updated', todo[0]);
+    res.json({ message: 'Dependency removed' });
+  } catch (err) { next(err); }
+});
+
+router.get('/:id/dependencies', async (req, res, next) => {
+  try {
+    const [deps] = await pool.query(
+      `SELECT t.id, t.title, t.status, t.completed FROM todo_dependencies td JOIN todos t ON t.id = td.depends_on_id WHERE td.todo_id = ?`,
+      [req.params.id]
+    );
+    res.json(deps);
+  } catch (err) { next(err); }
+});
+
+router.get('/:id/blocked-by', async (req, res, next) => {
+  try {
+    const blocking = await getBlockingDeps(req.params.id);
+    res.json({ blocked: blocking.length > 0, dependencies: blocking });
   } catch (err) { next(err); }
 });
 

@@ -799,4 +799,68 @@ const COMMANDS = {
       } catch (err) { return ` Error: ${err.message}`; }
     }
   },
+
+  deps: {
+    desc: 'Show dependencies of a todo',
+    usage: 'deps <row|id|"title">',
+    async execute(args) {
+      if (!args.length) return ' Usage: deps <row>';
+      const r = await resolveSingleTodo(args[0], { all: true });
+      if (r.error) return ` ${r.error}`;
+      try {
+        const deps = await API.listDependencies(r.todo.id);
+        const blocked = await API.checkBlocked(r.todo.id);
+        const lines = [` Dependencies of #${r.todo.id} "${r.todo.title}":`];
+        if (!deps.length) { lines.push('  (none)'); }
+        else {
+          deps.forEach(d => {
+            const mark = d.completed ? '✓' : '✗';
+            lines.push(`  ${mark} #${d.id} "${d.title}" [${d.status}]`);
+          });
+        }
+        if (blocked.blocked) {
+          lines.push(`\n  ⛔ Blocked by: ${blocked.dependencies.map(d => `#${d.id} "${d.title}"`).join(', ')}`);
+        }
+        return lines.join('\n');
+      } catch (err) { return ` Error: ${err.message}`; }
+    }
+  },
+
+  depends: {
+    desc: 'Add a dependency (A depends on B)',
+    usage: 'depends <row> on <row>',
+    async execute(args) {
+      const onIdx = args.indexOf('on');
+      if (onIdx < 1 || onIdx >= args.length - 1) return ' Usage: depends <row> on <row>';
+      const aSel = args.slice(0, onIdx).join(' ');
+      const bSel = args.slice(onIdx + 1).join(' ');
+      const rA = await resolveSingleTodo(aSel, { all: true });
+      if (rA.error) return ` ${rA.error}`;
+      const rB = await resolveSingleTodo(bSel, { all: true });
+      if (rB.error) return ` ${rB.error}`;
+      if (rA.todo.id === rB.todo.id) return ' A todo cannot depend on itself.';
+      try {
+        await API.addDependency(rA.todo.id, rB.todo.id);
+        invalidateCache();
+        return ` #${rA.todo.id} "${rA.todo.title}" now depends on #${rB.todo.id} "${rB.todo.title}"`;
+      } catch (err) { return ` Error: ${err.message}`; }
+    }
+  },
+
+  undep: {
+    desc: 'Remove a dependency',
+    usage: 'undep <row> <row>',
+    async execute(args) {
+      if (args.length < 2) return ' Usage: undep <row> <row>';
+      const rA = await resolveSingleTodo(args[0], { all: true });
+      if (rA.error) return ` ${rA.error}`;
+      const rB = await resolveSingleTodo(args[1], { all: true });
+      if (rB.error) return ` ${rB.error}`;
+      try {
+        await API.removeDependency(rA.todo.id, rB.todo.id);
+        invalidateCache();
+        return ` Removed: #${rA.todo.id} no longer depends on #${rB.todo.id}`;
+      } catch (err) { return ` Error: ${err.message}`; }
+    }
+  },
 };

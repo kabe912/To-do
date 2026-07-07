@@ -68,6 +68,7 @@ async function migrate() {
     await tryIndex('CREATE INDEX idx_todos_due_date ON todos(due_date)');
     await tryIndex('CREATE INDEX idx_todos_parent_id ON todos(parent_id)');
     await tryIndex('CREATE INDEX idx_time_logs_todo_end ON time_logs(todo_id, end_time)');
+    await conn.query(`CREATE TABLE IF NOT EXISTS todo_dependencies (todo_id INT NOT NULL, depends_on_id INT NOT NULL, PRIMARY KEY (todo_id, depends_on_id), FOREIGN KEY (todo_id) REFERENCES todos(id) ON DELETE CASCADE, FOREIGN KEY (depends_on_id) REFERENCES todos(id) ON DELETE CASCADE)`);
     console.log('Migration: tables ready');
     conn.release();
   } catch (err) {

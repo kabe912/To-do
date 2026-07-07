@@ -55,3 +55,11 @@ CREATE TABLE IF NOT EXISTS shared_links (
   expires_at TIMESTAMP NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS todo_dependencies (
+  todo_id       INT NOT NULL,
+  depends_on_id INT NOT NULL,
+  PRIMARY KEY (todo_id, depends_on_id),
+  FOREIGN KEY (todo_id) REFERENCES todos(id) ON DELETE CASCADE,
+  FOREIGN KEY (depends_on_id) REFERENCES todos(id) ON DELETE CASCADE
+);
