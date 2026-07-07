@@ -465,7 +465,7 @@ const COMMANDS = {
       if (title) updates.title = title;
 
       if (!Object.keys(updates).length) {
-        return ' No updates specified.';
+        return ' No updates specified. Use flags like -d DATE, -t TIME, -p PRIORITY, -c CAT, -s STATUS, --desc "text", or "new title" as 2nd arg.';
       }
 
       const results = [];
@@ -563,29 +563,43 @@ const COMMANDS = {
   },
 
   tag: {
-    desc: 'Manage tags on a todo',
-    usage: 'tag <row|id|"title"> [+tagName] [-tagName]',
+    desc: 'Manage tags on one or more todos',
+    usage: 'tag <row|id|"title"> [more...] [+tagName] [-tagName]',
     async execute(args) {
-      if (!args.length) return ' Usage: tag <row> [+tag] [-tag]';
-      const r = await resolveSingleTodo(args[0]);
-      if (r.error) return ` ${r.error}`;
-      const todoId = r.todo.id;
-      if (args.length === 1) {
-        const todo = await API.getTodo(todoId);
-        if (todo.tags && todo.tags.length) return ` Tags for #${todoId}: ${todo.tags.join(', ')}`;
-        return ` #${todoId} has no tags.`;
+      if (!args.length) return ' Usage: tag <row|id|"title"> [more...] [+tag] [-tag]';
+      const selectors = [];
+      const tagOps = [];
+      for (const a of args) {
+        if (a.startsWith('+') && a.length > 1) tagOps.push({ op: 'add', name: a.slice(1) });
+        else if (a.startsWith('-') && a.length > 1 && !a.match(/^\-\d+$/)) tagOps.push({ op: 'remove', name: a.slice(1) });
+        else selectors.push(a);
       }
+      if (!selectors.length) return ' No selectors provided.';
+
+      const todos = [];
+      for (const sel of selectors) {
+        const r = await resolveSingleTodo(sel, { all: true });
+        if (r.error) return ` ${r.error}`;
+        if (!todos.find(t => t.id === r.todo.id)) todos.push(r.todo);
+      }
+      if (!todos.length) return ' No matching todos.';
+
+      if (!tagOps.length) {
+        if (todos.length === 1) {
+          const todo = await API.getTodo(todos[0].id);
+          if (todo.tags && todo.tags.length) return ` Tags for #${todo.id}: ${todo.tags.join(', ')}`;
+          return ` #${todo.id} has no tags.`;
+        }
+        return ' Specify +tag to add or -tag to remove.';
+      }
+
       const results = [];
-      for (let i = 1; i < args.length; i++) {
-        const a = args[i];
-        if (a.startsWith('+')) {
-          try { await API.addTag(todoId, a.slice(1)); results.push(` Tag +${a.slice(1)}`); }
-          catch (err) { results.push(` ${err.message}`); }
-        } else if (a.startsWith('-')) {
-          try { await API.removeTag(todoId, a.slice(1)); results.push(` Tag -${a.slice(1)}`); }
-          catch (err) { results.push(` ${err.message}`); }
-        } else {
-          results.push(` Use +name to add, -name to remove`);
+      for (const t of todos) {
+        for (const op of tagOps) {
+          try {
+            if (op.op === 'add') { await API.addTag(t.id, op.name); results.push(` #${t.id} +${op.name}`); }
+            else { await API.removeTag(t.id, op.name); results.push(` #${t.id} -${op.name}`); }
+          } catch (err) { results.push(` #${t.id}: ${err.message}`); }
         }
       }
       invalidateCache();
