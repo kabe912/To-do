@@ -13,6 +13,12 @@ const CACHE_TTL = 1500;
 let _undoStack = [];
 const UNDO_MAX = 20;
 
+const _sessionId = localStorage.getItem('session_id') || (() => {
+  const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  localStorage.setItem('session_id', id);
+  return id;
+})();
+
 function invalidateCache() { _todoCache = null; }
 
 function pushUndo(action) {
@@ -476,33 +482,29 @@ const COMMANDS = {
     desc: 'Undo the last action',
     usage: 'undo',
     async execute() {
-      const action = _undoStack.pop();
-      if (!action) return ' Nothing to undo.';
       try {
-        switch (action.type) {
-          case 'delete':
-            await API.addTodo(action.todo);
-            invalidateCache();
-            return ` Undone: restored #${action.todo.id} "${action.todo.title}"`;
-          case 'purge':
-            for (const t of action.todos) {
-              // Try to restore (may fail if IDs conflict in auto-increment)
-              try { await API.addTodo(t); } catch(e) {}
-            }
-            invalidateCache();
-            return ` Undone: restored ${action.todos.length} archived todo(s)`;
-          case 'done':
-            await API.updateTodo(action.todo.id, { status: action.todo.status, completed: action.todo.completed });
-            invalidateCache();
-            return ` Undone: #${action.todo.id} "${action.todo.title}" back to ${action.todo.status}`;
-          case 'edit':
-            await API.updateTodo(action.id, action.prev);
-            invalidateCache();
-            return ` Undone: #${action.id} restored to previous state`;
-          default:
-            return ' Cannot undo that action.';
-        }
+        const result = await API.undoAction(_sessionId);
+        if (!result.undone) return ' Nothing to undo.';
+        invalidateCache();
+        if (result.undone.type === 'create') return ` Undone: deleted #${result.undone.id}`;
+        if (result.undone.type === 'delete') return ` Undone: restored #${result.undone.todo.id} "${result.undone.todo.title}"`;
+        return ` Undone: #${result.undone.todo.id} reverted`;
       } catch (err) { return ` Undo failed: ${err.message}`; }
+    }
+  },
+
+  redo: {
+    desc: 'Redo the last undone action',
+    usage: 'redo',
+    async execute() {
+      try {
+        const result = await API.redoAction(_sessionId);
+        if (!result.redone) return ' Nothing to redo.';
+        invalidateCache();
+        if (result.redone.type === 'create') return ` Redone: restored #${result.redone.todo.id} "${result.redone.todo.title}"`;
+        if (result.redone.type === 'delete') return ` Redone: deleted #${result.redone.id}`;
+        return ` Redone: #${result.redone.todo.id} reapplied`;
+      } catch (err) { return ` Redo failed: ${err.message}`; }
     }
   },
 

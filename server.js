@@ -11,6 +11,7 @@ const pool = require('./backend/config/db');
 const errorHandler = require('./backend/middleware/errorHandler');
 const todosRouter = require('./backend/routes/todos');
 const sharesRouter = require('./backend/routes/shares');
+const actionsRouter = require('./backend/routes/actions');
 const recurringJob = require('./backend/jobs/recurring');
 
 const app = express();
@@ -31,6 +32,7 @@ app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h', etag: tru
 
 app.use('/api/todos', todosRouter);
 app.use('/api/share', sharesRouter);
+app.use('/api/actions', actionsRouter);
 
 app.get('/share/:token', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'share.html'));
@@ -72,6 +74,7 @@ async function migrate() {
     await conn.query(`CREATE TABLE IF NOT EXISTS todo_dependencies (todo_id INT NOT NULL, depends_on_id INT NOT NULL, PRIMARY KEY (todo_id, depends_on_id), FOREIGN KEY (todo_id) REFERENCES todos(id) ON DELETE CASCADE, FOREIGN KEY (depends_on_id) REFERENCES todos(id) ON DELETE CASCADE)`);
     await tryAlter('ALTER TABLE todos ADD COLUMN next_due_date DATE DEFAULT NULL');
     await tryIndex('CREATE FULLTEXT INDEX idx_todos_fulltext ON todos(title, description)');
+    await conn.query(`CREATE TABLE IF NOT EXISTS action_history (id INT AUTO_INCREMENT PRIMARY KEY, session_id VARCHAR(64) NOT NULL, action_type VARCHAR(30) NOT NULL, todo_id INT NOT NULL, before_state JSON, after_state JSON, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_actions_session (session_id, created_at))`);
     console.log('Migration: tables ready');
     conn.release();
   } catch (err) {
