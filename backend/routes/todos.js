@@ -50,7 +50,7 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { title, description, category, priority, status, due_date, parent_id, recurring } = req.body;
+    const { title, description, category, priority, status, due_date, due_time, parent_id, recurring } = req.body;
     if (!title || !title.trim()) {
       return res.status(400).json({ error: 'Title is required' });
     }
@@ -62,8 +62,8 @@ router.post('/', async (req, res, next) => {
     const todoStatus = validStatuses.includes(status) ? status : 'pending';
 
     const [result] = await pool.query(
-      'INSERT INTO todos (title, description, category, priority, status, due_date, position, parent_id, recurring) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [title.trim(), description || null, category || null, priority || 'medium', todoStatus, due_date || null, position, parent_id || null, recurring || null]
+      'INSERT INTO todos (title, description, category, priority, status, due_date, due_time, position, parent_id, recurring) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [title.trim(), description || null, category || null, priority || 'medium', todoStatus, due_date || null, due_time || null, position, parent_id || null, recurring || null]
     );
 
     const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [result.insertId]);
@@ -120,7 +120,7 @@ router.get('/:id', async (req, res, next) => {
 router.put('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { title, description, category, priority, status, due_date, completed, parent_id, recurring, _session_id, _force, _clientUpdated } = req.body;
+    const { title, description, category, priority, status, due_date, due_time, completed, parent_id, recurring, _session_id, _force, _clientUpdated } = req.body;
 
     const [beforeRows] = await pool.query('SELECT * FROM todos WHERE id = ?', [id]);
     const beforeState = beforeRows[0] || null;
@@ -159,6 +159,7 @@ router.put('/:id', async (req, res, next) => {
       params.push(completedVal);
     }
     if (due_date !== undefined) { fields.push('due_date = ?'); params.push(due_date); }
+    if (due_time !== undefined) { fields.push('due_time = ?'); params.push(due_time); }
 
     if (completed !== undefined && status === undefined) {
       fields.push('completed = ?');
@@ -246,8 +247,8 @@ router.patch('/:id/complete', async (req, res, next) => {
 
       const [maxPos] = await pool.query('SELECT COALESCE(MAX(position), -1) + 1 AS pos FROM todos');
       const [result] = await pool.query(
-        'INSERT INTO todos (title, description, category, priority, status, due_date, position, recurring, next_due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [todo[0].title, todo[0].description, todo[0].category, todo[0].priority, 'pending', nextDue, maxPos[0].pos, todo[0].recurring, nextNextDue]
+        'INSERT INTO todos (title, description, category, priority, status, due_date, due_time, position, recurring, next_due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [todo[0].title, todo[0].description, todo[0].category, todo[0].priority, 'pending', nextDue, todo[0].due_time || null, maxPos[0].pos, todo[0].recurring, nextNextDue]
       );
       const [nt] = await pool.query('SELECT * FROM todos WHERE id = ?', [result.insertId]);
       newTodo = nt[0];

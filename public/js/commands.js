@@ -233,9 +233,9 @@ const COMMANDS = {
 
   add: {
     desc: 'Add a new todo',
-    usage: 'add "Title" [tmrw|today|nw] [high|med|low] [-c CAT] [--every daily|weekly]',
+    usage: 'add "Title" [tmrw|today|nw] [high|med|low] [-c CAT] [-t HH:MM] [--every daily|weekly]',
     async execute(args) {
-      if (!args.length) return ' Usage: add "Title" [tmrw|today|nw] [high|med|low] [-c CAT] [--every daily|weekly|monthly|yearly]';
+      if (!args.length) return ' Usage: add "Title" [tmrw|today|nw] [high|med|low] [-c CAT] [-t HH:MM] [--every daily|weekly|monthly|yearly]';
       let title = '';
       const todo = { status: 'pending', due_date: null };
       let i = 0, parentRow = null;
@@ -245,6 +245,7 @@ const COMMANDS = {
           case '-s': case '--status': todo.status = args[++i]; break;
           case '-p': case '--priority': todo.priority = args[++i]; break;
           case '-d': case '--due': case '--due-date': todo.due_date = args[++i]; break;
+          case '-t': case '--time': todo.due_time = args[++i]; break;
           case '-c': case '--category': todo.category = args[++i]; break;
           case '--desc': case '--description': todo.description = args[++i]; break;
           case '--every': todo.recurring = args[++i]; if (!RECURRING_TYPES.includes(todo.recurring)) return ' Recurring must be: daily, weekly, monthly, yearly'; break;
@@ -398,7 +399,7 @@ const COMMANDS = {
 
   edit: {
     desc: 'Edit a todo',
-    usage: 'edit <row|id|"title"> "new title" [-s STATUS] [-p PRIORITY] [-d DATE] [-c CATEGORY] [--desc "text"]',
+    usage: 'edit <row|id|"title"> "new title" [-s STATUS] [-p PRIORITY] [-d DATE] [-t HH:MM] [-c CATEGORY] [--desc "text"]',
     async execute(args) {
       if (args.length < 2) return ' Usage: edit <row | id | "title"> ...';
       const r = await resolveSingleTodo(args[0]);
@@ -414,6 +415,7 @@ const COMMANDS = {
           case '-s': case '--status': updates.status = args[++i]; break;
           case '-p': case '--priority': updates.priority = args[++i]; break;
           case '-d': case '--due': case '--due-date': updates.due_date = args[++i]; break;
+          case '-t': case '--time': updates.due_time = args[++i]; break;
           case '-c': case '--category': updates.category = args[++i]; break;
           case '--desc': case '--description': updates.description = args[++i]; break;
           default: title = (title ? title + ' ' : '') + args[i]; i++; continue;

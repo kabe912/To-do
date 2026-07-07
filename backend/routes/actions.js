@@ -43,8 +43,8 @@ router.post('/undo', async (req, res, next) => {
     } else if (action.action_type === 'delete' && before) {
       const [maxPos] = await pool.query('SELECT COALESCE(MAX(position), -1) + 1 AS pos FROM todos');
       await pool.query(
-        'INSERT INTO todos (id, title, description, category, priority, status, due_date, completed, position, parent_id, recurring, next_due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [before.id, before.title, before.description, before.category, before.priority, before.status, before.due_date, before.completed, maxPos[0].pos, before.parent_id, before.recurring, before.next_due_date]
+        'INSERT INTO todos (id, title, description, category, priority, status, due_date, due_time, completed, position, parent_id, recurring, next_due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [before.id, before.title, before.description, before.category, before.priority, before.status, before.due_date, before.due_time, before.completed, maxPos[0].pos, before.parent_id, before.recurring, before.next_due_date]
       );
       const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [before.id]);
       if (todo[0]) req.app.get('io').emit('todo:created', todo[0]);
@@ -59,6 +59,7 @@ router.post('/undo', async (req, res, next) => {
       if (before.status !== undefined) { fields.push('status = ?'); params.push(before.status); }
       if (before.completed !== undefined) { fields.push('completed = ?'); params.push(before.completed); }
       if (before.due_date !== undefined) { fields.push('due_date = ?'); params.push(before.due_date); }
+      if (before.due_time !== undefined) { fields.push('due_time = ?'); params.push(before.due_time); }
       if (fields.length) {
         params.push(action.todo_id);
         await pool.query(`UPDATE todos SET ${fields.join(', ')} WHERE id = ?`, params);
@@ -98,8 +99,8 @@ router.post('/redo', async (req, res, next) => {
     } else if (action.action_type === 'create') {
       const [maxPos] = await pool.query('SELECT COALESCE(MAX(position), -1) + 1 AS pos FROM todos');
       await pool.query(
-        'INSERT INTO todos (id, title, description, category, priority, status, due_date, completed, position, parent_id, recurring, next_due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [after.id, after.title, after.description, after.category, after.priority, after.status, after.due_date, after.completed, maxPos[0].pos, after.parent_id, after.recurring, after.next_due_date]
+        'INSERT INTO todos (id, title, description, category, priority, status, due_date, due_time, completed, position, parent_id, recurring, next_due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [after.id, after.title, after.description, after.category, after.priority, after.status, after.due_date, after.due_time, after.completed, maxPos[0].pos, after.parent_id, after.recurring, after.next_due_date]
       );
       const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [after.id]);
       if (todo[0]) req.app.get('io').emit('todo:created', todo[0]);

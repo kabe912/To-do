@@ -73,6 +73,7 @@
       <div class="todo-cell status">Status</div>
       <div class="todo-cell priority">Pri</div>
       <div class="todo-cell due">Due</div>
+      <div class="todo-cell time">Time</div>
       <div class="todo-cell category">Cat</div>
       <div class="todo-cell tags">Tags</div>`;
     table.appendChild(header);
@@ -84,12 +85,14 @@
       const priClass = t.priority === 'high' ? 'priority-high' : t.priority === 'low' ? 'priority-low' : 'priority-medium';
       const sc = statusColors[t.status] || 'status-pending';
       const sl = statusLabels[t.status] || t.status;
+      const timeVal = t.due_time ? t.due_time.slice(0, 5) : '';
       row.innerHTML = `
         <div class="todo-cell id">${t._row || t.id}</div>
         <div class="todo-cell title${t.status === 'completed' || t.status === 'learned' ? ' done' : ''}"><span class="title-text">${escapeHtml(t.title)}</span></div>
         <div class="todo-cell status"><span class="status-badge ${sc}">${sl}</span></div>
         <div class="todo-cell priority ${priClass}">${t.priority.toUpperCase().substring(0, 4)}</div>
         <div class="todo-cell due">${typeof formatDate === 'function' ? formatDate(t.due_date) : (t.due_date || '')}</div>
+        <div class="todo-cell time">${escapeHtml(timeVal)}</div>
         <div class="todo-cell category">${escapeHtml(t.category || '')}</div>
         <div class="todo-cell tags">${t.tags ? escapeHtml(t.tags.join(', ')) : ''}</div>`;
       table.appendChild(row);
@@ -146,9 +149,11 @@
         const isDone = t.status === 'completed' || t.status === 'learned';
         const priClass = t.priority === 'high' ? 'pri-high' : t.priority === 'low' ? 'pri-low' : 'pri-medium';
         const statusLabels = { pending: 'pending', in_progress: 'learn', completed: 'done', learned: 'known' };
+        const timeVal = t.due_time ? t.due_time.slice(0, 5) : '';
         row.innerHTML = `
           <span class="dt-check ${isDone ? 'done' : ''}">${isDone ? '✓' : '○'}</span>
           <span class="dt-title ${isDone ? 'done-text' : ''}">${escapeHtml(t.title)}</span>
+          <span class="dt-time">${escapeHtml(timeVal)}</span>
           <span class="dt-pri ${priClass}">${t.priority.toUpperCase().substring(0,4)}</span>
           <span class="dt-status">${statusLabels[t.status] || t.status}</span>`;
         container.appendChild(row);
