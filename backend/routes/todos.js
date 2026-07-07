@@ -58,6 +58,9 @@ router.post('/', async (req, res, next) => {
     const [maxPos] = await pool.query('SELECT COALESCE(MAX(position), -1) + 1 AS pos FROM todos');
     const position = maxPos[0].pos;
 
+    if (due_date && !/^\d{4}-\d{2}-\d{2}$/.test(due_date)) {
+      return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+    }
     const validStatuses = ['pending', 'in_progress', 'completed', 'learned'];
     const todoStatus = validStatuses.includes(status) ? status : 'pending';
 
@@ -158,7 +161,12 @@ router.put('/:id', async (req, res, next) => {
       fields.push('completed = ?');
       params.push(completedVal);
     }
-    if (due_date !== undefined) { fields.push('due_date = ?'); params.push(due_date); }
+    if (due_date !== undefined) {
+      if (due_date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(due_date)) {
+        return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+      }
+      fields.push('due_date = ?'); params.push(due_date);
+    }
     if (due_time !== undefined) { fields.push('due_time = ?'); params.push(due_time); }
 
     if (completed !== undefined && status === undefined) {
