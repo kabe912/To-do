@@ -11,6 +11,7 @@ const pool = require('./backend/config/db');
 const errorHandler = require('./backend/middleware/errorHandler');
 const todosRouter = require('./backend/routes/todos');
 const sharesRouter = require('./backend/routes/shares');
+const recurringJob = require('./backend/jobs/recurring');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -69,6 +70,7 @@ async function migrate() {
     await tryIndex('CREATE INDEX idx_todos_parent_id ON todos(parent_id)');
     await tryIndex('CREATE INDEX idx_time_logs_todo_end ON time_logs(todo_id, end_time)');
     await conn.query(`CREATE TABLE IF NOT EXISTS todo_dependencies (todo_id INT NOT NULL, depends_on_id INT NOT NULL, PRIMARY KEY (todo_id, depends_on_id), FOREIGN KEY (todo_id) REFERENCES todos(id) ON DELETE CASCADE, FOREIGN KEY (depends_on_id) REFERENCES todos(id) ON DELETE CASCADE)`);
+    await tryAlter('ALTER TABLE todos ADD COLUMN next_due_date DATE DEFAULT NULL');
     console.log('Migration: tables ready');
     conn.release();
   } catch (err) {
@@ -77,6 +79,7 @@ async function migrate() {
 }
 
 migrate().then(() => {
+  recurringJob.start(io);
   server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });

@@ -218,19 +218,14 @@ router.patch('/:id/complete', async (req, res, next) => {
 
     let newTodo = null;
     if (todo[0].recurring) {
-      const recurring = todo[0].recurring;
-      let nextDue = null;
-      const due = todo[0].due_date ? new Date(todo[0].due_date) : new Date();
-      if (recurring === 'daily') due.setDate(due.getDate() + 1);
-      else if (recurring === 'weekly') due.setDate(due.getDate() + 7);
-      else if (recurring === 'monthly') due.setMonth(due.getMonth() + 1);
-      else if (recurring === 'yearly') due.setFullYear(due.getFullYear() + 1);
-      nextDue = due.toISOString().split('T')[0];
+      const { calculateNextDue } = require('../jobs/recurring');
+      const nextDue = calculateNextDue(todo[0].due_date, todo[0].recurring);
+      const nextNextDue = calculateNextDue(nextDue, todo[0].recurring);
 
       const [maxPos] = await pool.query('SELECT COALESCE(MAX(position), -1) + 1 AS pos FROM todos');
       const [result] = await pool.query(
-        'INSERT INTO todos (title, description, category, priority, status, due_date, position, recurring) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [todo[0].title, todo[0].description, todo[0].category, todo[0].priority, 'pending', nextDue, maxPos[0].pos, recurring]
+        'INSERT INTO todos (title, description, category, priority, status, due_date, position, recurring, next_due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [todo[0].title, todo[0].description, todo[0].category, todo[0].priority, 'pending', nextDue, maxPos[0].pos, todo[0].recurring, nextNextDue]
       );
       const [nt] = await pool.query('SELECT * FROM todos WHERE id = ?', [result.insertId]);
       newTodo = nt[0];
