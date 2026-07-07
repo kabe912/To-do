@@ -1,10 +1,12 @@
 require('dotenv').config();
 
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const { Server } = require('socket.io');
 const pool = require('./backend/config/db');
 const errorHandler = require('./backend/middleware/errorHandler');
 const todosRouter = require('./backend/routes/todos');
@@ -39,6 +41,15 @@ app.get('*', (req, res) => {
 
 app.use(errorHandler);
 
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: allowedOrigins || '*' } });
+app.set('io', io);
+
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+  socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
+});
+
 async function migrate() {
   try {
     const conn = await pool.getConnection();
@@ -65,7 +76,7 @@ async function migrate() {
 }
 
 migrate().then(() => {
-  app.listen(PORT, () => {
+  server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 });

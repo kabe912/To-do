@@ -64,6 +64,7 @@ router.post('/', async (req, res, next) => {
     );
 
     const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [result.insertId]);
+    req.app.get('io').emit('todo:created', todo[0]);
     res.status(201).json(todo[0]);
   } catch (err) { next(err); }
 });
@@ -159,6 +160,7 @@ router.put('/:id', async (req, res, next) => {
 
     const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [id]);
     if (!todo[0]) return res.status(404).json({ error: 'Todo not found' });
+    req.app.get('io').emit('todo:updated', todo[0]);
     res.json(todo[0]);
   } catch (err) { next(err); }
 });
@@ -171,6 +173,7 @@ router.delete('/:id', async (req, res, next) => {
     await pool.query('DELETE FROM time_logs WHERE todo_id = ?', [id]);
     const [result] = await pool.query('DELETE FROM todos WHERE id = ?', [id]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Todo not found' });
+    req.app.get('io').emit('todo:deleted', { id: parseInt(id) });
     res.json({ message: 'Todo deleted' });
   } catch (err) { next(err); }
 });
@@ -186,6 +189,7 @@ router.patch('/:id/toggle', async (req, res, next) => {
     `, [id]);
     const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [id]);
     if (!todo[0]) return res.status(404).json({ error: 'Todo not found' });
+    req.app.get('io').emit('todo:statusChanged', todo[0]);
     res.json(todo[0]);
   } catch (err) { next(err); }
 });
@@ -219,6 +223,8 @@ router.patch('/:id/complete', async (req, res, next) => {
     }
 
     const [updated] = await pool.query('SELECT * FROM todos WHERE id = ?', [id]);
+    req.app.get('io').emit('todo:statusChanged', updated[0]);
+    if (newTodo) req.app.get('io').emit('todo:created', newTodo);
     res.json({ todo: updated[0], recurring: newTodo });
   } catch (err) { next(err); }
 });
