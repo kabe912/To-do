@@ -38,6 +38,10 @@ const API = {
     return data;
   },
 
+  listTodosByRange(from, to) {
+    return this.request('GET', `/todos?from=${from}&to=${to}`);
+  },
+
   listTodos(filters = {}) {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v); });

@@ -332,6 +332,251 @@ html, body {
   color: #fff;
 }
 
+/* ── Planning views (Day / Week / Month) ── */
+.planning-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 6px 0 10px 0;
+  padding: 6px 0;
+  border-bottom: 1px solid #333;
+}
+.planning-nav .nav-title {
+  color: #00d4ff;
+  font-weight: 700;
+  font-size: 15px;
+}
+.planning-nav .nav-arrows {
+  display: flex;
+  gap: 4px;
+}
+.planning-nav .nav-btn {
+  background: transparent;
+  border: 1px solid #555;
+  color: #ccc;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 2px 10px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.planning-nav .nav-btn:hover {
+  background: #333;
+  color: #fff;
+  border-color: #00d4ff;
+}
+
+/* Day view */
+.day-view-list {
+  margin: 6px 0;
+}
+.day-task {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  font-size: 13px;
+  gap: 8px;
+  border-bottom: 1px solid #2a2a2a;
+}
+.day-task:hover {
+  background: rgba(255,255,255,0.03);
+}
+.day-task .dt-check {
+  width: 18px;
+  color: #555;
+  font-size: 14px;
+}
+.day-task .dt-check.done {
+  color: #00ff41;
+}
+.day-task .dt-title {
+  flex: 1;
+  color: #f0f0f0;
+}
+.day-task .dt-title.done-text {
+  text-decoration: line-through;
+  color: #666;
+}
+.day-task .dt-pri {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+.day-task .dt-pri.pri-high {
+  color: #ff5555;
+}
+.day-task .dt-pri.pri-medium {
+  color: #ffd700;
+}
+.day-task .dt-pri.pri-low {
+  color: #888;
+}
+.day-task .dt-status {
+  font-size: 10px;
+  color: #888;
+  text-transform: uppercase;
+}
+.day-empty {
+  color: #555;
+  text-align: center;
+  padding: 12px;
+  font-style: italic;
+}
+
+/* Week grid */
+.week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin: 6px 0;
+  min-height: 120px;
+}
+.week-day {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  padding: 4px;
+  min-height: 80px;
+  font-size: 11px;
+}
+.week-day.today {
+  border-color: #00d4ff;
+  background: rgba(0,212,255,0.06);
+}
+.week-day.other-month {
+  opacity: 0.35;
+}
+.week-day .wd-header {
+  font-weight: 700;
+  color: #888;
+  text-align: center;
+  padding-bottom: 3px;
+  border-bottom: 1px solid #2a2a2a;
+  margin-bottom: 3px;
+  font-size: 11px;
+}
+.week-day.today .wd-header {
+  color: #00d4ff;
+}
+.week-day .wd-item {
+  padding: 1px 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+  border-radius: 2px;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.week-day .wd-item:hover {
+  background: rgba(255,255,255,0.05);
+}
+.week-day .wd-item .pri-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+.week-day .wd-item .pri-dot.high { background: #ff5555; }
+.week-day .wd-item .pri-dot.medium { background: #ffd700; }
+.week-day .wd-item .pri-dot.low { background: #888; }
+
+/* Month calendar grid */
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  margin: 6px 0;
+}
+.month-grid .mg-header {
+  text-align: center;
+  font-weight: 700;
+  font-size: 11px;
+  color: #888;
+  padding: 4px 0;
+  text-transform: uppercase;
+}
+.mg-day {
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  padding: 3px 4px;
+  min-height: 48px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 11px;
+  background: rgba(255,255,255,0.01);
+}
+.mg-day:hover {
+  background: rgba(0,212,255,0.08);
+  border-color: #555;
+}
+.mg-day.today {
+  border-color: #00d4ff;
+  background: rgba(0,212,255,0.06);
+}
+.mg-day.other-month {
+  opacity: 0.3;
+}
+.mg-day .mg-num {
+  font-weight: 700;
+  color: #aaa;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+.mg-day.today .mg-num {
+  color: #00d4ff;
+}
+.mg-day .mg-count {
+  font-size: 10px;
+  color: #00ff41;
+  line-height: 1.3;
+}
+.mg-day .mg-count.has-overdue {
+  color: #ff5555;
+}
+.mg-day .mg-tasks {
+  font-size: 9px;
+  color: #888;
+  line-height: 1.3;
+  overflow: hidden;
+}
+.mg-day .mg-tasks .mg-task-item {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* View switcher */
+.view-switcher {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.view-switcher .vs-btn {
+  background: transparent;
+  border: 1px solid #555;
+  color: #888;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 3px 14px;
+  cursor: pointer;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.view-switcher .vs-btn:hover {
+  border-color: #888;
+  color: #ccc;
+}
+.view-switcher .vs-btn.active {
+  border-color: #00d4ff;
+  color: #00d4ff;
+  background: rgba(0,212,255,0.08);
+}
+
 /* Responsive */
 @media (max-width: 700px) {
   #terminal { height: 100vh; max-height: 100vh; border-radius: 0; max-width: 100vw; width: 100vw; }

@@ -901,6 +901,87 @@ const COMMANDS = {
     }
   },
 
+  day: {
+    desc: 'Show day planning view (tasks due on a date)',
+    usage: 'day [YYYY-MM-DD | +N | tomorrow | yesterday]',
+    async execute(args) {
+      let target = new Date();
+      if (args.length) {
+        const a = args[0];
+        if (a === 'tomorrow' || a === 'tmrw') target.setDate(target.getDate() + 1);
+        else if (a === 'yesterday' || a === 'yest') target.setDate(target.getDate() - 1);
+        else if (a.startsWith('+')) target.setDate(target.getDate() + parseInt(a.slice(1)));
+        else if (a.startsWith('-')) target.setDate(target.getDate() - parseInt(a.slice(1)));
+        else target = new Date(a + 'T00:00:00');
+      }
+      if (isNaN(target.getTime())) return ' Invalid date. Usage: day [YYYY-MM-DD | +N | tomorrow | yesterday]';
+      const dateStr = target.getFullYear() + '-' +
+        String(target.getMonth() + 1).padStart(2, '0') + '-' +
+        String(target.getDate()).padStart(2, '0');
+      try {
+        const todos = await API.listTodosByRange(dateStr, dateStr);
+        return { view: 'day', date: dateStr, todos };
+      } catch (err) { return ` Error: ${err.message}`; }
+    }
+  },
+
+  week: {
+    desc: 'Show week planning view (7-day grid)',
+    usage: 'week [YYYY-MM-DD | +N | next]',
+    async execute(args) {
+      let target = new Date();
+      if (args.length) {
+        const a = args[0];
+        if (a === 'next') target.setDate(target.getDate() + 7);
+        else if (a.startsWith('+')) target.setDate(target.getDate() + parseInt(a.slice(1)));
+        else if (a.startsWith('-')) target.setDate(target.getDate() - parseInt(a.slice(1)));
+        else target = new Date(a + 'T00:00:00');
+      }
+      if (isNaN(target.getTime())) return ' Invalid date. Usage: week [YYYY-MM-DD | +N | next]';
+      const dayOfWeek = target.getDay();
+      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const monday = new Date(target);
+      monday.setDate(target.getDate() + mondayOffset);
+      const weekStart = monday.getFullYear() + '-' +
+        String(monday.getMonth() + 1).padStart(2, '0') + '-' +
+        String(monday.getDate()).padStart(2, '0');
+      const weekEnd = new Date(monday);
+      weekEnd.setDate(monday.getDate() + 6);
+      const weekEndStr = weekEnd.getFullYear() + '-' +
+        String(weekEnd.getMonth() + 1).padStart(2, '0') + '-' +
+        String(weekEnd.getDate()).padStart(2, '0');
+      try {
+        const todos = await API.listTodosByRange(weekStart, weekEndStr);
+        return { view: 'week', weekStart, todos };
+      } catch (err) { return ` Error: ${err.message}`; }
+    }
+  },
+
+  month: {
+    desc: 'Show month calendar planning view',
+    usage: 'month [YYYY-MM | +N | next]',
+    async execute(args) {
+      const now = new Date();
+      let year = now.getFullYear(), month = now.getMonth();
+      if (args.length) {
+        const a = args[0];
+        if (a === 'next') { month += 1; if (month > 11) { month = 0; year += 1; } }
+        else if (a === 'prev') { month -= 1; if (month < 0) { month = 11; year -= 1; } }
+        else if (a.startsWith('+')) { month += parseInt(a.slice(1)); while (month > 11) { month -= 12; year += 1; } }
+        else if (a.startsWith('-')) { month -= parseInt(a.slice(1)); while (month < 0) { month += 12; year -= 1; } }
+        else if (a.match(/^\d{4}-\d{2}$/)) { year = parseInt(a); month = parseInt(a.split('-')[1]) - 1; }
+        else return ' Usage: month [YYYY-MM | +N | next | prev]';
+      }
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const from = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const to = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
+      try {
+        const todos = await API.listTodosByRange(from, to);
+        return { view: 'month', year, month, todos };
+      } catch (err) { return ` Error: ${err.message}`; }
+    }
+  },
+
   sync: {
     desc: 'Force replay offline queue / check sync status',
     usage: 'sync',

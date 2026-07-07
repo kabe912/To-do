@@ -100,13 +100,240 @@
     output.scrollTop = output.scrollHeight;
   }
 
+  function execCommand(cmd) {
+    input.value = cmd;
+    submitInput();
+  }
+
+  function renderDayView(dateStr, todos) {
+    const frag = document.createDocumentFragment();
+    const container = document.createElement('div');
+    container.className = 'day-view-list';
+
+    const nav = document.createElement('div');
+    nav.className = 'planning-nav';
+    const d = new Date(dateStr + 'T00:00:00');
+    const prev = new Date(d); prev.setDate(prev.getDate() - 1);
+    const next = new Date(d); next.setDate(next.getDate() + 1);
+    const fmt = (dt) => dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+    const displayDate = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+    nav.innerHTML = `
+      <button class="nav-btn" data-cmd="day ${fmt(prev)}">◀</button>
+      <span class="nav-title">${escapeHtml(displayDate)}</span>
+      <span style="display:flex;gap:4px">
+        <button class="nav-btn" data-cmd="day">Today</button>
+        <button class="nav-btn" data-cmd="day ${fmt(next)}">▶</button>
+      </span>`;
+    container.appendChild(nav);
+
+    nav.querySelectorAll('[data-cmd]').forEach(btn => {
+      btn.addEventListener('click', () => execCommand(btn.dataset.cmd));
+    });
+
+    if (!todos || !todos.length) {
+      const empty = document.createElement('div');
+      empty.className = 'day-empty';
+      empty.textContent = 'No tasks for this day.';
+      container.appendChild(empty);
+    } else {
+      todos.forEach(t => {
+        const row = document.createElement('div');
+        row.className = 'day-task';
+        const isDone = t.status === 'completed' || t.status === 'learned';
+        const priClass = t.priority === 'high' ? 'pri-high' : t.priority === 'low' ? 'pri-low' : 'pri-medium';
+        const statusLabels = { pending: 'pending', in_progress: 'learn', completed: 'done', learned: 'known' };
+        row.innerHTML = `
+          <span class="dt-check ${isDone ? 'done' : ''}">${isDone ? '✓' : '○'}</span>
+          <span class="dt-title ${isDone ? 'done-text' : ''}">${escapeHtml(t.title)}</span>
+          <span class="dt-pri ${priClass}">${t.priority.toUpperCase().substring(0,4)}</span>
+          <span class="dt-status">${statusLabels[t.status] || t.status}</span>`;
+        container.appendChild(row);
+      });
+    }
+
+    frag.appendChild(container);
+    output.appendChild(frag);
+    output.scrollTop = output.scrollHeight;
+  }
+
+  function renderWeekView(weekStartStr, todos) {
+    const frag = document.createDocumentFragment();
+    const container = document.createElement('div');
+
+    const start = new Date(weekStartStr + 'T00:00:00');
+    const prev = new Date(start); prev.setDate(prev.getDate() - 7);
+    const next = new Date(start); next.setDate(next.getDate() + 7);
+    const fmt = (dt) => dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+
+    const nav = document.createElement('div');
+    nav.className = 'planning-nav';
+    const endOfWeek = new Date(start); endOfWeek.setDate(endOfWeek.getDate() + 6);
+    const rangeLabel = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' — ' + endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    nav.innerHTML = `
+      <button class="nav-btn" data-cmd="week ${fmt(prev)}">◀</button>
+      <span class="nav-title">${escapeHtml(rangeLabel)}</span>
+      <span style="display:flex;gap:4px">
+        <button class="nav-btn" data-cmd="week">Today</button>
+        <button class="nav-btn" data-cmd="week ${fmt(next)}">▶</button>
+      </span>`;
+    container.appendChild(nav);
+    nav.querySelectorAll('[data-cmd]').forEach(btn => {
+      btn.addEventListener('click', () => execCommand(btn.dataset.cmd));
+    });
+
+    const grid = document.createElement('div');
+    grid.className = 'week-grid';
+
+    const todayStr = new Date().getFullYear() + '-' + String(new Date().getMonth()+1).padStart(2,'0') + '-' + String(new Date().getDate()).padStart(2,'0');
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(start); day.setDate(start.getDate() + i);
+      const ds = fmt(day);
+      const cell = document.createElement('div');
+      cell.className = 'week-day';
+      if (ds === todayStr) cell.classList.add('today');
+
+      const dayLabel = dayNames[i] + ' ' + day.getDate();
+      cell.innerHTML = `<div class="wd-header">${escapeHtml(dayLabel)}</div>`;
+
+      const dayTodos = todos.filter(t => t.due_date === ds);
+      dayTodos.forEach(t => {
+        const item = document.createElement('div');
+        item.className = 'wd-item';
+        const isDone = t.status === 'completed' || t.status === 'learned';
+        const priDot = `<span class="pri-dot ${t.priority}"></span>`;
+        const titleClass = isDone ? ' style="text-decoration:line-through;color:#666"' : '';
+        item.innerHTML = `${priDot}<span${titleClass}>${escapeHtml(t.title)}</span>`;
+        cell.appendChild(item);
+      });
+
+      if (!dayTodos.length) {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'color:#444;font-size:10px;padding:4px;text-align:center';
+        empty.textContent = '—';
+        cell.appendChild(empty);
+      }
+
+      grid.appendChild(cell);
+    }
+
+    container.appendChild(grid);
+    frag.appendChild(container);
+    output.appendChild(frag);
+    output.scrollTop = output.scrollHeight;
+  }
+
+  function renderMonthView(year, month, todos) {
+    const frag = document.createDocumentFragment();
+    const container = document.createElement('div');
+
+    const todayStr = new Date().getFullYear() + '-' + String(new Date().getMonth()+1).padStart(2,'0') + '-' + String(new Date().getDate()).padStart(2,'0');
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDay = new Date(year, month, 1).getDay();
+    const monthName = new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+    const prevMonth = month === 0 ? 11 : month - 1;
+    const prevYear = month === 0 ? year - 1 : year;
+    const nextMonth = month === 11 ? 0 : month + 1;
+    const nextYear = month === 11 ? year + 1 : year;
+
+    const nav = document.createElement('div');
+    nav.className = 'planning-nav';
+    nav.innerHTML = `
+      <button class="nav-btn" data-cmd="month ${prevYear}-${String(prevMonth+1).padStart(2,'0')}">◀</button>
+      <span class="nav-title">${escapeHtml(monthName)}</span>
+      <span style="display:flex;gap:4px">
+        <button class="nav-btn" data-cmd="month">Today</button>
+        <button class="nav-btn" data-cmd="month ${nextYear}-${String(nextMonth+1).padStart(2,'0')}">▶</button>
+      </span>`;
+    container.appendChild(nav);
+    nav.querySelectorAll('[data-cmd]').forEach(btn => {
+      btn.addEventListener('click', () => execCommand(btn.dataset.cmd));
+    });
+
+    const grid = document.createElement('div');
+    grid.className = 'month-grid';
+
+    const dayHeaders = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    dayHeaders.forEach(h => {
+      const hd = document.createElement('div');
+      hd.className = 'mg-header';
+      hd.textContent = h;
+      grid.appendChild(hd);
+    });
+
+    const daysInPrevMonth = new Date(prevYear, prevMonth + 1, 0).getDate();
+    const startOffset = (firstDay + 6) % 7;
+
+    for (let i = 0; i < startOffset; i++) {
+      const prevDate = daysInPrevMonth - startOffset + i + 1;
+      const cell = document.createElement('div');
+      cell.className = 'mg-day other-month';
+      cell.innerHTML = `<div class="mg-num">${prevDate}</div>`;
+      grid.appendChild(cell);
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      const cell = document.createElement('div');
+      cell.className = 'mg-day';
+      if (ds === todayStr) cell.classList.add('today');
+
+      const dayTodos = todos.filter(t => t.due_date === ds);
+      const activeTodos = dayTodos.filter(t => t.status !== 'completed' && t.status !== 'learned');
+      const overdue = activeTodos.filter(t => t.due_date && t.due_date < todayStr);
+
+      let countHtml = '';
+      if (activeTodos.length > 0) {
+        const cls = overdue.length > 0 ? 'mg-count has-overdue' : 'mg-count';
+        countHtml = `<div class="${cls}">${activeTodos.length} active</div>`;
+      }
+
+      let tasksHtml = '';
+      if (dayTodos.length <= 3) {
+        dayTodos.forEach(t => {
+          const mark = (t.status === 'completed' || t.status === 'learned') ? '✓' : '○';
+          tasksHtml += `<div class="mg-task-item">${mark} ${escapeHtml(t.title.length > 18 ? t.title.slice(0,18)+'…' : t.title)}</div>`;
+        });
+      } else {
+        tasksHtml = `<div class="mg-task-item">${dayTodos.length} tasks</div>`;
+      }
+
+      cell.innerHTML = `<div class="mg-num">${day}</div>${countHtml}<div class="mg-tasks">${tasksHtml}</div>`;
+      cell.addEventListener('click', () => execCommand('day ' + ds));
+      grid.appendChild(cell);
+    }
+
+    const totalCells = startOffset + daysInMonth;
+    const remaining = (7 - (totalCells % 7)) % 7;
+    for (let i = 1; i <= remaining; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'mg-day other-month';
+      cell.innerHTML = `<div class="mg-num">${i}</div>`;
+      grid.appendChild(cell);
+    }
+
+    container.appendChild(grid);
+    frag.appendChild(container);
+    output.appendChild(frag);
+    output.scrollTop = output.scrollHeight;
+  }
+
   function printResult(result) {
     if (typeof result === 'string') {
       addLine(ansiToHtml(result));
     } else if (result && result.clear) {
       clearScreen();
-    } else if (result && result.todos) {
+    } else if (result && result.todos && !result.view) {
       showTable(result.todos);
+    } else if (result && result.view === 'day') {
+      renderDayView(result.date, result.todos);
+    } else if (result && result.view === 'week') {
+      renderWeekView(result.weekStart, result.todos);
+    } else if (result && result.view === 'month') {
+      renderMonthView(result.year, result.month, result.todos);
     }
   }
 
@@ -408,7 +635,8 @@
     document.getElementById('overlay').classList.add('hidden');
   };
 
-  window.Terminal = { clear: clearScreen, addLine, output };
+  window.execCmd = execCommand;
+  window.Terminal = { clear: clearScreen, addLine, output, exec: execCommand };
 
   input.focus();
 })();

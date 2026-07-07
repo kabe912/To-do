@@ -5,9 +5,11 @@ const { logAction } = require('../routes/actions');
 
 router.get('/', async (req, res, next) => {
   try {
-    const { category, priority, search, status, completed, sort, due_soon } = req.query;
+    const { category, priority, search, status, completed, sort, due_soon, from, to } = req.query;
     let sql = 'SELECT * FROM todos WHERE 1=1';
     const params = [];
+    if (from) { sql += ' AND due_date >= ?'; params.push(from); }
+    if (to) { sql += ' AND due_date <= ?'; params.push(to); }
 
     if (category) { sql += ' AND category = ?'; params.push(category); }
     if (priority) { sql += ' AND priority = ?'; params.push(priority); }
