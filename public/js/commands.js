@@ -449,6 +449,20 @@ const COMMANDS = {
     }
   },
 
+  fsearch: {
+    desc: 'Full-text fuzzy search on title & description',
+    usage: 'fsearch <query>',
+    async execute(args) {
+      if (!args.length) return ' Usage: fsearch <query>';
+      try {
+        const todos = await API.searchTodos(args.join(' '));
+        if (!todos.length) return ' No results found.';
+        todos.forEach((t, i) => t._row = i + 1);
+        return { todos, showRow: true };
+      } catch (err) { return ` Error: ${err.message}`; }
+    }
+  },
+
   sort: {
     desc: 'Sort todos by field',
     usage: 'sort <due|priority|created>',

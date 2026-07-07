@@ -71,6 +71,7 @@ async function migrate() {
     await tryIndex('CREATE INDEX idx_time_logs_todo_end ON time_logs(todo_id, end_time)');
     await conn.query(`CREATE TABLE IF NOT EXISTS todo_dependencies (todo_id INT NOT NULL, depends_on_id INT NOT NULL, PRIMARY KEY (todo_id, depends_on_id), FOREIGN KEY (todo_id) REFERENCES todos(id) ON DELETE CASCADE, FOREIGN KEY (depends_on_id) REFERENCES todos(id) ON DELETE CASCADE)`);
     await tryAlter('ALTER TABLE todos ADD COLUMN next_due_date DATE DEFAULT NULL');
+    await tryIndex('CREATE FULLTEXT INDEX idx_todos_fulltext ON todos(title, description)');
     console.log('Migration: tables ready');
     conn.release();
   } catch (err) {

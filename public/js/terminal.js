@@ -157,6 +157,13 @@
     return entries.map(([name, cmd]) => ({ name, desc: cmd.desc }));
   }
 
+  async function buildTagSuggestions(filter) {
+    try {
+      const tags = await API.autocompleteTags(filter || '');
+      return tags.map(t => ({ name: '+' + t.name, desc: `${t.count} todo(s)` }));
+    } catch (e) { return []; }
+  }
+
   function renderSuggestions(items) {
     suggestions.innerHTML = '';
     suggestionItems = items;
@@ -221,6 +228,18 @@
       const items = buildSuggestions(filter);
       renderSuggestions(items);
     } else {
+      const parts = val.split(' ');
+      if (parts.length >= 2 && (parts[0] === 'tag' || parts[0] === 'depends' || parts[0] === 'undep')) {
+        const lastPart = parts[parts.length - 1];
+        if (lastPart.startsWith('+') || lastPart === '') {
+          const filter = lastPart.startsWith('+') ? lastPart.slice(1) : '';
+          buildTagSuggestions(filter).then(items => {
+            if (items.length && input.value === val) renderSuggestions(items);
+            else hideSuggestions();
+          });
+          return;
+        }
+      }
       hideSuggestions();
     }
   }

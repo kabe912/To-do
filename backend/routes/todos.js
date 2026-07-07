@@ -372,4 +372,44 @@ router.get('/:id/blocked-by', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+/* ── Full-text search ── */
+
+router.get('/search', async (req, res, next) => {
+  try {
+    const { q, limit } = req.query;
+    if (!q || !q.trim()) return res.status(400).json({ error: 'Query required' });
+    const max = Math.min(parseInt(limit) || 20, 50);
+    const [rows] = await pool.query(
+      `SELECT *, MATCH(title, description) AGAINST(? IN BOOLEAN MODE) AS relevance FROM todos WHERE MATCH(title, description) AGAINST(? IN BOOLEAN MODE) ORDER BY relevance DESC LIMIT ?`,
+      [q, q, max]
+    );
+    if (rows.length) {
+      const ids = rows.map(r => r.id);
+      const placeholders = ids.map(() => '?').join(',');
+      const [tagRows] = await pool.query(
+        `SELECT tt.todo_id, t.name FROM todo_tags tt JOIN tags t ON t.id = tt.tag_id WHERE tt.todo_id IN (${placeholders})`,
+        ids
+      );
+      const tagMap = {};
+      tagRows.forEach(r => { if (!tagMap[r.todo_id]) tagMap[r.todo_id] = []; tagMap[r.todo_id].push(r.name); });
+      rows.forEach(r => { r.tags = tagMap[r.id] || []; });
+    }
+    res.json(rows);
+  } catch (err) { next(err); }
+});
+
+/* ── Tag autocomplete ── */
+
+router.get('/tags/autocomplete', async (req, res, next) => {
+  try {
+    const { q } = req.query;
+    let sql = 'SELECT t.name, COUNT(tt.todo_id) AS count FROM tags t LEFT JOIN todo_tags tt ON t.id = tt.tag_id';
+    const params = [];
+    if (q) { sql += ' WHERE t.name LIKE ?'; params.push(`%${q}%`); }
+    sql += ' GROUP BY t.id ORDER BY count DESC, t.name LIMIT 10';
+    const [rows] = await pool.query(sql, params);
+    res.json(rows);
+  } catch (err) { next(err); }
+});
+
 module.exports = router;

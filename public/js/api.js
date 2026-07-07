@@ -28,6 +28,8 @@ const API = {
   reorderTodos(ids) { return this.request('PATCH', '/todos/reorder', { ids }); },
   getStats() { return this.request('GET', '/todos/stats'); },
 
+  searchTodos(q, limit) { const qs = `?q=${encodeURIComponent(q)}${limit ? '&limit=' + limit : ''}`; return this.request('GET', `/todos/search${qs}`); },
+  autocompleteTags(q) { const qs = q ? `?q=${encodeURIComponent(q)}` : ''; return this.request('GET', `/todos/tags/autocomplete${qs}`); },
   listTags() { return this.request('GET', '/todos/tags/list'); },
   addTag(todoId, name) { return this.request('POST', `/todos/${todoId}/tags`, { name }); },
   removeTag(todoId, name) { return this.request('DELETE', `/todos/${todoId}/tags/${name}`); },
