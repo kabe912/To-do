@@ -1,3 +1,7 @@
+function getAuthToken() {
+  try { return localStorage.getItem('auth_token'); } catch (e) { return null; }
+}
+
 const API = {
   async request(method, path, body) {
     const isMutation = method !== 'GET';
@@ -23,6 +27,8 @@ const API = {
       method,
       headers: { 'Content-Type': 'application/json' },
     };
+    const token = getAuthToken();
+    if (token) opts.headers['Authorization'] = 'Bearer ' + token;
     if (body) opts.body = JSON.stringify(body);
     else if (method === 'GET' || method === 'DELETE') {
       const sid = typeof _sessionId !== 'undefined' ? _sessionId : '';
@@ -81,4 +87,12 @@ const API = {
   createShareLink(data) { return this.request('POST', '/share', data); },
   getShareLink(token) { return this.request('GET', `/share/${token}`); },
   verifySharePassword(token, password) { return this.request('POST', `/share/${token}/verify`, { password }); },
+
+  /* ── Auth ── */
+  register(username, password) { return this.request('POST', '/auth/register', { username, password }); },
+  login(username, password) { return this.request('POST', '/auth/login', { username, password }); },
+  getMe() { return this.request('GET', '/auth/me'); },
+
+  /* ── Streak ── */
+  getStreak() { return this.request('GET', '/streak'); },
 };

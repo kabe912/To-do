@@ -38,8 +38,10 @@
 
   function addPrompt(cmd) {
     const div = document.createElement('div');
+    const user = localStorage.getItem('auth_username');
+    const prompt = user ? `<span class="green">${escapeHtml(user)}</span><span class="gray">$</span>` : `<span class="red">?</span><span class="gray">$</span>`;
     div.className = 'line';
-    div.innerHTML = `<span class="green">$</span> ${escapeHtml(cmd)}`;
+    div.innerHTML = `${prompt} ${escapeHtml(cmd)}`;
     output.appendChild(div);
   }
 
@@ -649,6 +651,28 @@
 
   window.execCmd = execCommand;
   window.Terminal = { clear: clearScreen, addLine, output, exec: execCommand };
+
+  function updatePrompt() {
+    const promptEl = document.getElementById('prompt');
+    if (!promptEl) return;
+    const user = localStorage.getItem('auth_username');
+    if (user) {
+      promptEl.className = 'prompt logged-in';
+      promptEl.textContent = user + '$';
+    } else {
+      promptEl.className = 'prompt';
+      promptEl.textContent = '$';
+    }
+  }
+
+  // Listen for auth changes
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'auth_username' || e.key === 'auth_token') updatePrompt();
+  });
+
+  // Poll for auth changes (in case commands modify localStorage)
+  setInterval(updatePrompt, 2000);
+  updatePrompt();
 
   input.focus();
 })();

@@ -3,14 +3,15 @@ const router = express.Router();
 const pool = require('../config/db');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
+const { requireAuth } = require('../middleware/auth');
 
-router.post('/', async (req, res, next) => {
+router.post('/', requireAuth, async (req, res, next) => {
   try {
     const { todo_ids, password, expires_in_days } = req.body;
 
     let todoIds = todo_ids;
     if (!todoIds) {
-      const [todos] = await pool.query('SELECT id FROM todos');
+      const [todos] = await pool.query('SELECT id FROM todos WHERE user_id = ?', [req.userId]);
       todoIds = todos.map(t => t.id);
     }
 

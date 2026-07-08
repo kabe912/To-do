@@ -2,12 +2,13 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const { logAction } = require('../routes/actions');
+const { updateStreak } = require('../routes/streak');
 
 router.get('/', async (req, res, next) => {
   try {
     const { category, priority, search, status, completed, sort, due_soon, from, to } = req.query;
-    let sql = 'SELECT * FROM todos WHERE 1=1';
-    const params = [];
+    let sql = 'SELECT * FROM todos WHERE user_id = ?';
+    const params = [req.userId];
     if (from) { sql += ' AND due_date >= ?'; params.push(from); }
     if (to) { sql += ' AND due_date <= ?'; params.push(to); }
 
@@ -65,8 +66,8 @@ router.post('/', async (req, res, next) => {
     const todoStatus = validStatuses.includes(status) ? status : 'pending';
 
     const [result] = await pool.query(
-      'INSERT INTO todos (title, description, category, priority, status, due_date, due_time, position, parent_id, recurring) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [title.trim(), description || null, category || null, priority || 'medium', todoStatus, due_date || null, due_time || null, position, parent_id || null, recurring || null]
+      'INSERT INTO todos (title, description, category, priority, status, due_date, due_time, position, parent_id, recurring, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [title.trim(), description || null, category || null, priority || 'medium', todoStatus, due_date || null, due_time || null, position, parent_id || null, recurring || null, req.userId]
     );
 
     const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [result.insertId]);
@@ -89,7 +90,7 @@ router.patch('/reorder', async (req, res, next) => {
     if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
     const cases = ids.map((id, i) => `WHEN id = ${parseInt(id)} THEN ${i}`).join(' ');
     const idList = ids.map(id => parseInt(id)).join(',');
-    await pool.query(`UPDATE todos SET position = CASE ${cases} END WHERE id IN (${idList})`);
+    await pool.query(`UPDATE todos SET position = CASE ${cases} END WHERE id IN (${idList}) AND user_id = ?`, [req.userId]);
     res.json({ message: 'Reordered' });
   } catch (err) { next(err); }
 });
@@ -104,15 +105,20 @@ router.get('/stats', async (req, res, next) => {
         SUM(status = 'completed') AS completed,
         SUM(status = 'learned') AS learned,
         COUNT(DISTINCT category) AS categories
-      FROM todos
-    `);
-    res.json(rows[0]);
+      FROM todos WHERE user_id = ?
+    `, [req.userId]);
+    // Also fetch streak info
+    const [streakRows] = await pool.query('SELECT current_streak, longest_streak FROM user_streaks WHERE user_id = ?', [req.userId]);
+    const result = rows[0];
+    result.current_streak = streakRows.length ? streakRows[0].current_streak : 0;
+    result.longest_streak = streakRows.length ? streakRows[0].longest_streak : 0;
+    res.json(result);
   } catch (err) { next(err); }
 });
 
 router.get('/:id', async (req, res, next) => {
   try {
-    const [todos] = await pool.query('SELECT * FROM todos WHERE id = ?', [req.params.id]);
+    const [todos] = await pool.query('SELECT * FROM todos WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);
     if (!todos[0]) return res.status(404).json({ error: 'Todo not found' });
     const [subtasks] = await pool.query('SELECT id, title, status, completed FROM todos WHERE parent_id = ?', [req.params.id]);
     todos[0].subtasks = subtasks;
@@ -125,8 +131,9 @@ router.put('/:id', async (req, res, next) => {
     const { id } = req.params;
     const { title, description, category, priority, status, due_date, due_time, completed, parent_id, recurring, _session_id, _force, _clientUpdated } = req.body;
 
-    const [beforeRows] = await pool.query('SELECT * FROM todos WHERE id = ?', [id]);
+    const [beforeRows] = await pool.query('SELECT * FROM todos WHERE id = ? AND user_id = ?', [id, req.userId]);
     const beforeState = beforeRows[0] || null;
+    if (!beforeState) return res.status(404).json({ error: 'Todo not found' });
 
     if (!_force && _clientUpdated && beforeState && beforeState.updated_at) {
       const clientTime = new Date(_clientUpdated).getTime();
@@ -179,8 +186,8 @@ router.put('/:id', async (req, res, next) => {
       return res.status(400).json({ error: 'No fields to update' });
     }
 
-    params.push(id);
-    await pool.query(`UPDATE todos SET ${fields.join(', ')} WHERE id = ?`, params);
+    params.push(id, req.userId);
+    await pool.query(`UPDATE todos SET ${fields.join(', ')} WHERE id = ? AND user_id = ?`, params);
 
     const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [id]);
     if (!todo[0]) return res.status(404).json({ error: 'Todo not found' });
@@ -194,12 +201,13 @@ router.delete('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
     const _session_id = req.query._session_id || req.body._session_id;
-    const [beforeRows] = await pool.query('SELECT * FROM todos WHERE id = ?', [id]);
+    const [beforeRows] = await pool.query('SELECT * FROM todos WHERE id = ? AND user_id = ?', [id, req.userId]);
     const beforeState = beforeRows[0] || null;
+    if (!beforeState) return res.status(404).json({ error: 'Todo not found' });
     await pool.query('UPDATE todos SET parent_id = NULL WHERE parent_id = ?', [id]);
     await pool.query('DELETE FROM todo_tags WHERE todo_id = ?', [id]);
     await pool.query('DELETE FROM time_logs WHERE todo_id = ?', [id]);
-    const [result] = await pool.query('DELETE FROM todos WHERE id = ?', [id]);
+    const [result] = await pool.query('DELETE FROM todos WHERE id = ? AND user_id = ?', [id, req.userId]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Todo not found' });
     req.app.get('io').emit('todo:deleted', { id: parseInt(id) });
     if (_session_id && beforeState) logAction(_session_id, 'delete', parseInt(id), beforeState, null);
@@ -210,7 +218,7 @@ router.delete('/:id', async (req, res, next) => {
 router.patch('/:id/toggle', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const [current] = await pool.query('SELECT completed FROM todos WHERE id = ?', [id]);
+    const [current] = await pool.query('SELECT completed FROM todos WHERE id = ? AND user_id = ?', [id, req.userId]);
     if (!current.length) return res.status(404).json({ error: 'Todo not found' });
     if (!current[0].completed) {
       const blocking = await getBlockingDeps(id);
@@ -218,12 +226,17 @@ router.patch('/:id/toggle', async (req, res, next) => {
         return res.status(409).json({ error: `Blocked by: ${blocking.map(d => `#${d.id} "${d.title}"`).join(', ')}` });
       }
     }
+    const wasCompleted = current[0].completed;
     await pool.query(`
       UPDATE todos
       SET completed = NOT completed,
-          status = CASE WHEN completed = 1 THEN 'pending' ELSE 'completed' END
-      WHERE id = ?
-    `, [id]);
+          status = CASE WHEN ? = 1 THEN 'pending' ELSE 'completed' END
+      WHERE id = ? AND user_id = ?
+    `, [wasCompleted ? 1 : 0, id, req.userId]);
+
+    if (!wasCompleted) {
+      await updateStreak(req.userId).catch(() => {});
+    }
     const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [id]);
     req.app.get('io').emit('todo:statusChanged', todo[0]);
     res.json(todo[0]);
@@ -234,7 +247,7 @@ router.patch('/:id/complete', async (req, res, next) => {
   try {
     const { id } = req.params;
     const _session_id = req.body._session_id;
-    const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [id]);
+    const [todo] = await pool.query('SELECT * FROM todos WHERE id = ? AND user_id = ?', [id, req.userId]);
     if (!todo[0]) return res.status(404).json({ error: 'Todo not found' });
     const beforeState = { ...todo[0] };
 
@@ -246,6 +259,7 @@ router.patch('/:id/complete', async (req, res, next) => {
     }
 
     await pool.query('UPDATE todos SET status = "completed", completed = 1 WHERE id = ?', [id]);
+    await updateStreak(req.userId).catch(() => {});
 
     let newTodo = null;
     if (todo[0].recurring) {
@@ -255,8 +269,8 @@ router.patch('/:id/complete', async (req, res, next) => {
 
       const [maxPos] = await pool.query('SELECT COALESCE(MAX(position), -1) + 1 AS pos FROM todos');
       const [result] = await pool.query(
-        'INSERT INTO todos (title, description, category, priority, status, due_date, due_time, position, recurring, next_due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [todo[0].title, todo[0].description, todo[0].category, todo[0].priority, 'pending', nextDue, todo[0].due_time || null, maxPos[0].pos, todo[0].recurring, nextNextDue]
+        'INSERT INTO todos (title, description, category, priority, status, due_date, due_time, position, recurring, next_due_date, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [todo[0].title, todo[0].description, todo[0].category, todo[0].priority, 'pending', nextDue, todo[0].due_time || null, maxPos[0].pos, todo[0].recurring, nextNextDue, todo[0].user_id || req.userId]
       );
       const [nt] = await pool.query('SELECT * FROM todos WHERE id = ?', [result.insertId]);
       newTodo = nt[0];
@@ -276,6 +290,9 @@ router.post('/:id/tags', async (req, res, next) => {
     const { name } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Tag name required' });
 
+    const [todoCheck] = await pool.query('SELECT id FROM todos WHERE id = ? AND user_id = ?', [id, req.userId]);
+    if (!todoCheck.length) return res.status(404).json({ error: 'Todo not found' });
+
     const [existing] = await pool.query('SELECT id FROM tags WHERE name = ?', [name.trim()]);
     let tagId;
     if (existing.length) {
@@ -292,6 +309,8 @@ router.post('/:id/tags', async (req, res, next) => {
 
 router.delete('/:id/tags/:name', async (req, res, next) => {
   try {
+    const [todoCheck] = await pool.query('SELECT id FROM todos WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);
+    if (!todoCheck.length) return res.status(404).json({ error: 'Todo not found' });
     await pool.query(
       'DELETE tt FROM todo_tags tt JOIN tags t ON t.id = tt.tag_id WHERE tt.todo_id = ? AND t.name = ?',
       [req.params.id, req.params.name]
@@ -303,6 +322,8 @@ router.delete('/:id/tags/:name', async (req, res, next) => {
 router.post('/:id/time/start', async (req, res, next) => {
   try {
     const { id } = req.params;
+    const [todoCheck] = await pool.query('SELECT id FROM todos WHERE id = ? AND user_id = ?', [id, req.userId]);
+    if (!todoCheck.length) return res.status(404).json({ error: 'Todo not found' });
     await pool.query('UPDATE time_logs SET end_time = CURRENT_TIMESTAMP, duration = TIMESTAMPDIFF(SECOND, start_time, CURRENT_TIMESTAMP) WHERE todo_id = ? AND end_time IS NULL', [id]);
     const [r] = await pool.query('INSERT INTO time_logs (todo_id) VALUES (?)', [id]);
     const [log] = await pool.query('SELECT * FROM time_logs WHERE id = ?', [r.insertId]);
@@ -313,6 +334,8 @@ router.post('/:id/time/start', async (req, res, next) => {
 router.put('/:id/time/stop', async (req, res, next) => {
   try {
     const { id } = req.params;
+    const [todoCheck] = await pool.query('SELECT id FROM todos WHERE id = ? AND user_id = ?', [id, req.userId]);
+    if (!todoCheck.length) return res.status(404).json({ error: 'Todo not found' });
     await pool.query('UPDATE time_logs SET end_time = CURRENT_TIMESTAMP, duration = TIMESTAMPDIFF(SECOND, start_time, CURRENT_TIMESTAMP) WHERE todo_id = ? AND end_time IS NULL', [id]);
     const [logs] = await pool.query('SELECT * FROM time_logs WHERE todo_id = ? ORDER BY start_time DESC', [id]);
     res.json(logs);
@@ -321,6 +344,8 @@ router.put('/:id/time/stop', async (req, res, next) => {
 
 router.get('/:id/time', async (req, res, next) => {
   try {
+    const [todoCheck] = await pool.query('SELECT id FROM todos WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);
+    if (!todoCheck.length) return res.status(404).json({ error: 'Todo not found' });
     const [logs] = await pool.query('SELECT * FROM time_logs WHERE todo_id = ? ORDER BY start_time DESC', [req.params.id]);
     const [total] = await pool.query('SELECT COALESCE(SUM(duration), 0) AS total FROM time_logs WHERE todo_id = ?', [req.params.id]);
     res.json({ logs, total_seconds: total[0].total });
@@ -358,9 +383,9 @@ router.post('/:id/dependencies', async (req, res, next) => {
     if (!depends_on_id) return res.status(400).json({ error: 'depends_on_id required' });
     if (parseInt(id) === parseInt(depends_on_id)) return res.status(400).json({ error: 'A todo cannot depend on itself' });
 
-    const [existing] = await pool.query('SELECT id FROM todos WHERE id = ?', [id]);
+    const [existing] = await pool.query('SELECT id FROM todos WHERE id = ? AND user_id = ?', [id, req.userId]);
     if (!existing.length) return res.status(404).json({ error: 'Todo not found' });
-    const [depExists] = await pool.query('SELECT id FROM todos WHERE id = ?', [depends_on_id]);
+    const [depExists] = await pool.query('SELECT id FROM todos WHERE id = ? AND user_id = ?', [depends_on_id, req.userId]);
     if (!depExists.length) return res.status(404).json({ error: 'Dependency todo not found' });
 
     const [dupe] = await pool.query('SELECT 1 FROM todo_dependencies WHERE todo_id = ? AND depends_on_id = ?', [id, depends_on_id]);
@@ -380,6 +405,8 @@ router.post('/:id/dependencies', async (req, res, next) => {
 router.delete('/:id/dependencies/:depId', async (req, res, next) => {
   try {
     const { id, depId } = req.params;
+    const [todoCheck] = await pool.query('SELECT id FROM todos WHERE id = ? AND user_id = ?', [id, req.userId]);
+    if (!todoCheck.length) return res.status(404).json({ error: 'Todo not found' });
     await pool.query('DELETE FROM todo_dependencies WHERE todo_id = ? AND depends_on_id = ?', [id, depId]);
     const [todo] = await pool.query('SELECT * FROM todos WHERE id = ?', [id]);
     if (todo[0]) req.app.get('io').emit('todo:updated', todo[0]);
@@ -389,6 +416,8 @@ router.delete('/:id/dependencies/:depId', async (req, res, next) => {
 
 router.get('/:id/dependencies', async (req, res, next) => {
   try {
+    const [todoCheck] = await pool.query('SELECT id FROM todos WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);
+    if (!todoCheck.length) return res.status(404).json({ error: 'Todo not found' });
     const [deps] = await pool.query(
       `SELECT t.id, t.title, t.status, t.completed FROM todo_dependencies td JOIN todos t ON t.id = td.depends_on_id WHERE td.todo_id = ?`,
       [req.params.id]
@@ -399,6 +428,8 @@ router.get('/:id/dependencies', async (req, res, next) => {
 
 router.get('/:id/blocked-by', async (req, res, next) => {
   try {
+    const [todoCheck] = await pool.query('SELECT id FROM todos WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);
+    if (!todoCheck.length) return res.status(404).json({ error: 'Todo not found' });
     const blocking = await getBlockingDeps(req.params.id);
     res.json({ blocked: blocking.length > 0, dependencies: blocking });
   } catch (err) { next(err); }
@@ -412,8 +443,8 @@ router.get('/search', async (req, res, next) => {
     if (!q || !q.trim()) return res.status(400).json({ error: 'Query required' });
     const max = Math.min(parseInt(limit) || 20, 50);
     const [rows] = await pool.query(
-      `SELECT *, MATCH(title, description) AGAINST(? IN BOOLEAN MODE) AS relevance FROM todos WHERE MATCH(title, description) AGAINST(? IN BOOLEAN MODE) ORDER BY relevance DESC LIMIT ?`,
-      [q, q, max]
+      `SELECT *, MATCH(title, description) AGAINST(? IN BOOLEAN MODE) AS relevance FROM todos WHERE user_id = ? AND MATCH(title, description) AGAINST(? IN BOOLEAN MODE) ORDER BY relevance DESC LIMIT ?`,
+      [q, req.userId, q, max]
     );
     if (rows.length) {
       const ids = rows.map(r => r.id);

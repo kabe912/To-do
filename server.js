@@ -9,9 +9,12 @@ const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
 const pool = require('./backend/config/db');
 const errorHandler = require('./backend/middleware/errorHandler');
+const { requireAuth } = require('./backend/middleware/auth');
 const todosRouter = require('./backend/routes/todos');
 const sharesRouter = require('./backend/routes/shares');
 const actionsRouter = require('./backend/routes/actions');
+const authRouter = require('./backend/routes/auth');
+const streakRouter = require('./backend/routes/streak').router;
 const recurringJob = require('./backend/jobs/recurring');
 
 const app = express();
@@ -32,9 +35,11 @@ app.use('/api/share', shareVerifyLimiter);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/api/todos', todosRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/todos', requireAuth, todosRouter);
 app.use('/api/share', sharesRouter);
-app.use('/api/actions', actionsRouter);
+app.use('/api/actions', requireAuth, actionsRouter);
+app.use('/api/streak', requireAuth, streakRouter);
 
 app.get('/share/:token', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'share.html'));
@@ -79,6 +84,45 @@ async function migrate() {
     await tryAlter("ALTER TABLE todos MODIFY COLUMN due_time VARCHAR(50) DEFAULT NULL");
     await tryIndex('CREATE FULLTEXT INDEX idx_todos_fulltext ON todos(title, description)');
     await conn.query(`CREATE TABLE IF NOT EXISTS action_history (id INT AUTO_INCREMENT PRIMARY KEY, session_id VARCHAR(64) NOT NULL, action_type VARCHAR(30) NOT NULL, todo_id INT NOT NULL, before_state JSON, after_state JSON, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_actions_session (session_id, created_at))`);
+
+    /* ── Auth & Streak migration ── */
+    await conn.query(`CREATE TABLE IF NOT EXISTS users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      username VARCHAR(100) NOT NULL UNIQUE,
+      password_hash VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )`);
+    await tryAlter('ALTER TABLE todos ADD COLUMN user_id INT DEFAULT NULL');
+    await tryIndex('CREATE INDEX idx_todos_user_id ON todos(user_id)');
+
+    await conn.query(`CREATE TABLE IF NOT EXISTS user_streaks (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL UNIQUE,
+      current_streak INT DEFAULT 0,
+      longest_streak INT DEFAULT 0,
+      last_active_date DATE DEFAULT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`);
+
+    // Create default user if none exists, assign all existing todos to it
+    const [existingUsers] = await conn.query('SELECT COUNT(*) AS cnt FROM users');
+    if (existingUsers[0].cnt === 0) {
+      const bcrypt = require('bcryptjs');
+      const hash = await bcrypt.hash('default', 10);
+      const [defUser] = await conn.query('INSERT INTO users (username, password_hash) VALUES (?, ?)', ['default', hash]);
+      console.log('Migration: created default user (id=1, username=default, password=default)');
+      // Assign existing todos without user_id to default user
+      await conn.query('UPDATE todos SET user_id = ? WHERE user_id IS NULL', [defUser.insertId]);
+    } else {
+      // Just ensure any null user_ids are set to first user
+      const [firstUser] = await conn.query('SELECT id FROM users ORDER BY id LIMIT 1');
+      if (firstUser.length) {
+        await conn.query('UPDATE todos SET user_id = ? WHERE user_id IS NULL', [firstUser[0].id]);
+      }
+    }
+
     console.log('Migration: tables ready');
     conn.release();
   } catch (err) {

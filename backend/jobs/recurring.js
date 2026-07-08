@@ -28,8 +28,8 @@ async function processRecurring(io) {
 
       const [maxPos] = await conn.query('SELECT COALESCE(MAX(position), -1) + 1 AS pos FROM todos');
       const [result] = await conn.query(
-        'INSERT INTO todos (title, description, category, priority, status, due_date, due_time, position, recurring, next_due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [todo.title, todo.description, todo.category, todo.priority, 'pending', todo.next_due_date, todo.due_time || null, maxPos[0].pos, todo.recurring, calculateNextDue(todo.next_due_date, todo.recurring)]
+        'INSERT INTO todos (title, description, category, priority, status, due_date, due_time, position, recurring, next_due_date, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [todo.title, todo.description, todo.category, todo.priority, 'pending', todo.next_due_date, todo.due_time || null, maxPos[0].pos, todo.recurring, calculateNextDue(todo.next_due_date, todo.recurring), todo.user_id]
       );
 
       await conn.query('UPDATE todos SET next_due_date = NULL WHERE id = ?', [todo.id]);

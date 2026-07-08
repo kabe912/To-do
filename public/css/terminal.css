@@ -203,6 +203,10 @@ html, body {
   flex-shrink: 0;
 }
 
+.prompt.logged-in {
+  color: #ffd700;
+}
+
 #input-wrapper {
   flex: 1;
   position: relative;

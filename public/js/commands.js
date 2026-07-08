@@ -744,6 +744,7 @@ const COMMANDS = {
       try {
         const s = await API.getStats();
         const pct = s.total ? (s.completed / s.total * 100).toFixed(1) : '0.0';
+        const streakLine = s.current_streak ? `  Streak:       ${s.current_streak} days 🔥` : '';
         return [
           ' Statistics:',
           `  Total:        ${s.total}`,
@@ -753,7 +754,8 @@ const COMMANDS = {
           `  Completed:    ${s.completed}  (${pct}%)`,
           `  Learned:      ${s.learned || 0}`,
           `  Categories:   ${s.categories}`,
-        ].join('\n');
+          streakLine,
+        ].filter(Boolean).join('\n');
       } catch (err) { return ` Error: ${err.message}`; }
     }
   },
@@ -1061,6 +1063,70 @@ const COMMANDS = {
         return pending.length ? ` ${pending.length} mutation(s) still pending.` : ' Sync complete — all mutations applied.';
       }
       return ' Offline — mutations will be queued until reconnect.';
+    }
+  },
+
+  register: {
+    desc: 'Create a new account',
+    usage: 'register <username> <password>',
+    async execute(args) {
+      if (args.length < 2) return ' Usage: register <username> <password>';
+      try {
+        const res = await API.register(args[0], args[1]);
+        localStorage.setItem('auth_token', res.token);
+        localStorage.setItem('auth_username', res.user.username);
+        return ` Registered as "${res.user.username}" and logged in.`;
+      } catch (err) { return ` Error: ${err.message}`; }
+    }
+  },
+
+  login: {
+    desc: 'Log into your account',
+    usage: 'login <username> <password>',
+    async execute(args) {
+      if (args.length < 2) return ' Usage: login <username> <password>';
+      try {
+        const res = await API.login(args[0], args[1]);
+        localStorage.setItem('auth_token', res.token);
+        localStorage.setItem('auth_username', res.user.username);
+        return ` Logged in as "${res.user.username}".`;
+      } catch (err) { return ` Error: ${err.message}`; }
+    }
+  },
+
+  logout: {
+    desc: 'Log out of your account',
+    usage: 'logout',
+    execute() {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_username');
+      return ' Logged out.';
+    }
+  },
+
+  whoami: {
+    desc: 'Show current logged-in user',
+    usage: 'whoami',
+    execute() {
+      const user = localStorage.getItem('auth_username');
+      return user ? ` Current user: ${user}` : ' Not logged in. Use "login" or "register".';
+    }
+  },
+
+  streak: {
+    desc: 'Show your daily streak',
+    usage: 'streak',
+    async execute() {
+      try {
+        const s = await API.getStreak();
+        const fire = s.current_streak > 0 ? '\x1b[93m🔥\x1b[0m' : '';
+        return [
+          ` ${fire} Streak:`,
+          `  Current streak:  ${s.current_streak} day(s)`,
+          `  Longest streak:  ${s.longest_streak} day(s)`,
+          s.last_active_date ? `  Last active:     ${s.last_active_date}` : '  No activity yet.',
+        ].join('\n');
+      } catch (err) { return ` Error: ${err.message}`; }
     }
   },
 };
